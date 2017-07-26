@@ -12,4 +12,5 @@ if [ ! -e "bcswap_supp.html" ]
 		cd data
 		echo "Beginning ftp"
 		wget --user=jmlabftp --password='HOBICAmeer6' ftp://ftp2.cruk.cam.ac.uk/barcode_swapping/*
+
 fi

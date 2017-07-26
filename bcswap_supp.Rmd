@@ -577,7 +577,7 @@ In these plates, the top 250 genes contain most of the informative genes. We con
 
 Notably, the maximum expression value on a plate does not substantially drive selection of genes, shown for two plates in Figure \@ref(fig:gene-selection-max).
 
-```{r gene-selection-max, fig.cap="Effect of expression magnitude on gene selection. The ratio we use to select genes is not driven strongly by the size of the numerator: we are not simply selecting for genes with the highese expression in one cell."}
+```{r gene-selection-max, fig.cap="Effect of expression magnitude on gene selection. The ratio we use to select genes is not driven strongly by the size of the numerator: we are not simply selecting for genes with the highest expression in one cell."}
 
 
 vars_1 = apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
