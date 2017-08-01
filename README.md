@@ -6,7 +6,7 @@ This repo contains the Supplementary Files for the paper **Detection and Removal
 
 To generate the .html file, you first need to download the data. This can be done by changing your directory to the one that contains this repo,
 then running the get_data.sh file (requires `wget`, which can be installed on OSX using `homebrew`; otherwise use `ftp` using the logon details in the script). Then you can compile the .Rmd file, either using RStudio, 
-or `rmarkdown::render()`, from the R package `rmarkdown`. This step takes around 20 minutes on a 2017 MacBook Pro.
+or `rmarkdown::render()`, from the R package `rmarkdown`. You'll need to ensure you have the packages listed in the first code chunk installed. This step takes around 20 minutes on a 2017 MacBook Pro.
 
 ## Further barcode swapping resources
 
