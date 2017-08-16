@@ -1,4 +1,7 @@
 # BarcodeSwapping2017
+## Report information
+
+Github will not show the html report itneractively via the webpage: to view this document, it's easiest to download the entire repo as a zipped file (click "Clone or download" above, in green.)
 
 ## Code information
 
