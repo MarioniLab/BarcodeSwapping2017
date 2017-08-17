@@ -1257,6 +1257,8 @@ We can test for deviations in the observed rate of sharing against the null usin
 # Computation of p-values based on hypergeometric test
 compare <- function(barcodes, samples) {
     out <- NULL
+    samp_names = unique(samples)
+    samples <- as.numeric(as.factor(samples))
     ids <- levels(factor(samples, levels = seq_along(unique(samples))))
     combs <- combn(ids,m=2, simplify=FALSE)
     for (i in seq_along(combs)) {
@@ -1278,9 +1280,11 @@ compare <- function(barcodes, samples) {
 			  p=p.val)
 	out <- rbind(out,tmp)
     }
+    
+    out$s1 = samp_names[as.numeric(as.character(out$s1))]
+    out$s2 = samp_names[as.numeric(as.character(out$s2))]
     return(out)
 }
-
 
 ```
 
@@ -1329,7 +1333,6 @@ None of the p-values for any comparison is significant after FDR correction at a
 ```{r load-d1}
 
 samp1 = read.table(paste0(folder_location, "/data/tenx_4000_1.tab"), header = T)
-# samp1_comp = pairwise_comparisons(barcodes = samp1$barcode, samples = samp1$sample, n.cores = 3)
 samp1_comp = compare(samp1$barcode, samp1$sample)
 
 sig_row = which.min(samp1_comp$p)
