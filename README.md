@@ -22,3 +22,7 @@ If you are interested in the barcode swapping phenomenon, there are several othe
 * Another [bioRxiv paper, by Owens et al.](http://www.biorxiv.org/content/early/2017/05/25/142356), did not identify any increased swapping on HiSeq X, using genome sequencing data from unbalanced heterozygotes. 
 
 * Illumina [released a white paper](https://www.illumina.com/content/dam/illumina-marketing/documents/products/whitepapers/index-hopping-white-paper-770-2017-004.pdf?linkId=36607862) summarising the issue.
+
+* [Larsson et al.](http://www.biorxiv.org/content/early/2017/08/16/176537) describe a method to deconvolve the effects of swapping from plate-based scRNA-seq assays
+
+* [van der Valk et al.](http://www.biorxiv.org/content/early/2017/08/22/179028) do not identify excessive barcode swapping on HiSeq X (they also have an excellent and in-depth introduction to the barcode swapping phenomenon)
