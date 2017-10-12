@@ -1,15 +1,24 @@
 # BarcodeSwapping2017
+
+## Contents
+
+There are two main components to this repo: the supplementary report for the paper **Detection and Removal of Barcode Swapping in Single-Cell RNA-seq data** (`bcswap_supp.html`) and the code used to generate it (all other files). 
+
+Unless you want to reuse any of the code, or to tweak or regenerate the report for yourself, you probably only want the report, and not any of the other files.
+
+The preprint of the paper can be found [here](http://www.biorxiv.org/content/early/2017/08/16/177048)
+
+You can also find a .pdf of a poster I have used to present this work (`poster.pdf`)
+
 ## Report information
 
-Github will not show the html report interactively via the webpage: to view this document, it's easiest to download the entire repo as a zipped file (click "Clone or download" above, in green.)
+On my machine, Github will not show the html report interactively via the webpage: to view this document, it's easiest to download the entire repo as a zipped file (click "Clone or download" above, in green) or otherwise clone the repo.
 
 ## Code information
 
-This repo contains the Supplementary Files for the paper **Detection and Removal of Barcode Swapping in Single-Cell RNA-seq data**.
-
-To generate the .html file, you first need to download the data. This can be done by changing your directory to the one that contains this repo,
-then running the get_data.sh file (requires `wget`, which can be installed on OSX using `homebrew`; otherwise use `ftp` using the logon details in the script). Then you can compile the .Rmd file, either using RStudio, 
-or `rmarkdown::render()`, from the R package `rmarkdown`. You'll need to ensure you have the packages listed in the first code chunk installed. This step takes around 20 minutes on a 2017 MacBook Pro.
+To generate the .html file, you first need to download the data. This can be done by changing your working directory to the one that contains this repo,
+then running the get_data.sh file (requires `wget`, which can be installed on OSX using `homebrew`; otherwise use `ftp` using the logon details in the script). Then you can compile the .Rmd file either using RStudio 
+or `rmarkdown::render()`, from the R package `rmarkdown`. You'll need to ensure you have the packages listed in the first code chunk installed. This step takes around 20 minutes on a 2016 MacBook Pro.
 
 ## Further barcode swapping resources
 
