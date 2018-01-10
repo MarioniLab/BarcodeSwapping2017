@@ -177,13 +177,14 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
 
 ```
 
-##Swapping rate estimation
+## Swapping rate estimation
 
-We assume that barcode swapping is rare, meaning that it is unlikely that one molecule will undergo more than one round of swapping. 
-We also assume that the number of observed swapped transcripts is proportional to the number of transcripts that are available for swapping. 
-Under these conditions, the number of reads for each of the impossible combinations will be proportional to the sum of the library sizes of the expected combinations that share a single barcode.
-This is because a single barcode swap would be sufficient to transfer reads from those expected combinations to the impossible combination.
+Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ lies along rows in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ lies along columns ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
+Let $M_{i,j}$ denote the number of true molecules for this combination, and let $X_{i,j}$ denote the number of mapped reads.
+Impossible barcode combinations are those with $1 \leq i \leq 8, 1\leq j \leq 12$ or $9\leq i \leq 16, 13\leq j \leq 24$, and have $M_{i,j}=0$ by definition.
 
+We assume that barcode swapping is rare, so it is unlikely that one molecule will undergo more than one round of swapping. 
+This means that reads will only be transferred between combinations that already share a single barcode.
 For example, the combination `N719` and `S505` (red position) would take swapping contributions from the cells in the blue positions in Figure \@ref(fig:swap-schematic-source).
 
 ```{r swap-schematic-source, fig.cap="Considered 'available' transcript for barcode combination (N719,S505). We assume that the swapped transcript for the red labelled barcode combination will derive from the blue labelled combinations on the cell-loaded plate. These combinations need to swap only a single barcode to arrive at the red labelled cell. Cell-loaded combinations are shown in grey, and unloaded combinations in black."}
@@ -203,30 +204,27 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
   theme(legend.position = "none") +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(x = "Barcode 1", y = "Barcode 2")
-
-
-
 ```
 
-We now formally define the model for estimating the swapping rate.
-Let $X_{i,j}$ denote the mapped library size for the library indexed by barcodes $i$ ($i \in {1,\dots,16}$, along rows; $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and $j$ ($j \in {1,\dots,24}$, along columns; $j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
+We further assume that number of observed swapped reads is proportional to the number of molecules that are available for swapping. 
+Define $r$ as the rate of swapping from any single donor library to any single recipient library, i.e., the proportion of molecules in the donor library that appear as mislabelled reads in the recipient.
+For each barcode combination, the number of reads can be modelled as 
+
+$$\bar{X}_{i,j} = M_{i, j} + r \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}$$
+
+by assuming that each seeded molecule gives rise to one read.
+
+We subsequently estimate $r$ by minimizing the sum of $(X_{i,j} - \bar{X}_{i,j})^2$ across all $(i, j)$, using an iterative least-squares method.
+For a given $r$, the above expression yields a linear system where all $M_{i,j}$ are the unknown variables and all $X_{i,j}$ are the observations.
+The solution to this linear system minimizes the residual sum of squares _for this specific_ $r$.
+We repeat this procedure with different $r$ until we obtain the lowest residual sum of squares - the value $r$ at which this occurs is taken as our estimate.
+
+<!--
 The experimental design results in cells being seeded in two blocks of 96 wells (see Figure \@ref(fig:richard-schematic)), corresponding to $1 \leq i \leq 8$, $13 \leq j \leq 24$ and $9 \leq i \leq 16$, $1 \leq j \leq 12$. 
 Remaining barcode combinations (in the off-diagonal blocks) were not seeded with any cells or reagents. 
 Additionally the well with index $i=1,j=24$ was empty by design.
+-->
 
-Based on the assumptions stated above, the library size of the unoccupied barcode combinations is proportional to the sum of the library sizes of cell-seeded barcode combinations that share a single index. 
-We therefore fit the model:
-$$X_{i,j} = \alpha + \beta S_{i,j}$$
-for 
-
-$$1 \leq i \leq 8, 1\leq j \leq 12, \text{and } 9\leq i \leq 16, 13\leq j \leq 24$$
-
-where
-
-$$S_{i,j} = \begin{cases}
-\sum_{k=13}^{24} X_{i,k}  + \sum_{l=9}^{16} X_{l,j} \mbox{ for } 1 \leq i \leq 8, 1 \leq j \leq 12 \\
-\sum_{k=1}^{12} X_{i,k}  + \sum_{l=1}^{8} X_{l,j} \mbox{ for } 9 \leq i \leq 16, 13 \leq j \leq 24 
-\end{cases}$$
 
 using ordinary least squares. 
 Data and the model fit are shown in Figure \@ref(fig:correlation).
