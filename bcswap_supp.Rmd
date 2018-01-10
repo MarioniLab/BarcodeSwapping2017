@@ -88,9 +88,9 @@ Before continuing, we define a few terms:
 
 libs = read.table(paste0(folder_location, "/data/richard_4000.tab"), header = T, stringsAsFactors = F)
 libs_2500 = read.table(paste0(folder_location, "/data/richard_2500.tab"), header = TRUE, stringsAsFactors = FALSE)
-# There's an empty well on one of the plates too - we should mark this as "unexpected"
-libs$expected[libs$empty_well] = FALSE
-libs_2500$expected[libs_2500$empty_well] = FALSE
+# There's an empty well on one of the plates too
+libs$expected[libs$empty_well] = TRUE
+libs_2500$expected[libs_2500$empty_well] = TRUE
 
 
 
@@ -210,7 +210,7 @@ We further assume that number of observed swapped reads is proportional to the n
 Define $r$ as the rate of swapping from any single donor library to any single recipient library, i.e., the proportion of molecules in the donor library that appear as mislabelled reads in the recipient.
 For each barcode combination, the number of reads can be modelled as 
 
-$$\bar{X}_{i,j} = M_{i, j} + r \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}$$
+$$\bar{X}_{i,j} = M_{i, j} + r \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right)$$
 
 by assuming that each seeded molecule gives rise to one read.
 
@@ -347,7 +347,7 @@ In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode c
 
 We have applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data. The fit and data is displayed graphically in Figure \@ref(fig:model-2500)
 
-```{r model-2500, fig.cap="Model fit for HiSeq 2500 data. A similar trend as for the HiSeq 4000 data can be observed. We have excluded one outlying data point from the fit to prevent disproportionate influence on the prediction of the slope."}
+```{r model-2500, fig.cap="Model fit for HiSeq 2500 data. A similar trend as for the HiSeq 4000 data can be observed."}
 
 molten = melt( libs_2500[libs_2500$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
 casted = acast( molten , bc1~bc2 )
@@ -363,13 +363,12 @@ cell_outs = lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x
 df = do.call(rbind, cell_outs)
 df$tot = df$col + df$row
 
-df_outlier = df[-which.max(df$mapped),]
-mod_mapped_outlier = lm(df_outlier$mapped ~ df_outlier$tot)
+# df_outlier = df[-which.max(df$mapped),]
+# mod_mapped_outlier = lm(df_outlier$mapped ~ df_outlier$tot)
 mod_mapped_2500 = lm(df$mapped ~ df$tot)
 
 ggplot(df, aes(x = tot, y = mapped)) +
     geom_abline(slope = coef(mod_mapped_outlier)[2], intercept = coef(mod_mapped_outlier)[1], lwd = 1.5 ) +
-  geom_point(x = df$tot[which.max(df$mapped)], y = max(df$mapped), col = "coral", size = 3, alpha = 1) +
   geom_point(col = "grey50") +
   # geom_smooth(method = "lm", se = FALSE, col = "black", formula = y ~ x) +
   # scale_x_log10() + scale_y_log10() +
@@ -379,15 +378,14 @@ ggplot(df, aes(x = tot, y = mapped)) +
   scale_y_continuous(breaks = c(0, 600, 1200), labels = c("0", "600", "1,200"), limits = c(0,1250))+
   theme(axis.text = element_text(face = "bold", size = 11), 
        axis.title.y = element_text(size = 13, face = "bold"), 
-       axis.title.x = element_text(size = 13, face = "bold")) +
-  annotate(geom = "text", x = df$tot[which.max(df$mapped)], y = max(df$mapped)-75, label = "Outlier removed from model fit")
+       axis.title.x = element_text(size = 13, face = "bold"))
 
 
 
 
 ```
 
-Interestingly, we do still observe the swapping pattern. However, the swapping rate estimated is around an order of magnitude lower on the HiSeq 2500: `r format(coef(summary(mod_mapped_outlier))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped_outlier))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500 vs. `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
+Interestingly, we do still observe the swapping pattern. However, the swapping rate estimated is around an order of magnitude lower on the HiSeq 2500: `r format(coef(summary(mod_mapped_2500))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped_2500))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500 vs. `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
 
 #Plate-based analysis: Nestorowa data
 ##Introduction to data
