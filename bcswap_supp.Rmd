@@ -220,7 +220,7 @@ This means that, for each impossible combination $(i_0, j_0)$, we have
 $$\bar{X}_{i_0,j_0} \approx \frac{r}{c} \left( \sum_{k \neq j_0} X_{i,k} + \sum_{l \neq i_0} X_{l,j}\right) \;. $$
 
 This represents a linear relationship between the number of mapped reads (i.e., library size) for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
-Such a line can be fitteed using ordinary least squares, as shown in Figure \@ref(fig:correlation).
+We subsequently fit a line to $X_{i_0,j_0}$ against the sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
 
 <!--
 The experimental design results in cells being seeded in two blocks of 96 wells (see Figure \@ref(fig:richard-schematic)), corresponding to $1 \leq i \leq 8$, $13 \leq j \leq 24$ and $9 \leq i \leq 16$, $1 \leq j \leq 12$. 
@@ -322,11 +322,15 @@ This yields an estimated swapping rate of `r format(coef(summary(mod_mapped))[2,
 Notably, this is higher than the median-to-median fraction of `r format(mappedfrac*100, digits = 2)`%. 
 This is because the median-to-median fraction only considered swapped reads arriving in the unexpected barcode combinations, whereas this slope-estimated value considers reads swapping across the entire set of barcode combinations.
 
-The intercept value for the model is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)`$\pm$`r format(coef(summary(mod_mapped))[1,2], digits = 4)`, which is close to zero as expected.
+Note that we actually fitted the line with an intercept.
+The intercept value for the model is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)`$\pm$`r format(coef(summary(mod_mapped))[1,2], digits = 4)`.
+This is close to zero compared to a median library size of `r libs$mapped[!libs$expected]` for the expected combinations, consistent with our model for $\bar{X}_{i_0,j_0}$.
 
 ## Negative control data with the HiSeq 2500
 
-The exact same pool of libraries was also sequenced on a HiSeq 2500. We see strong correlation between library sizes from the two machines, as shown in Figure \@ref(fig:compare-libs). 
+The exact same pool of multiplexed libraries was also sequenced on a HiSeq 2500. 
+This provides a negative control dataset where barcode swapping should not be present.
+We see strong correlation between library sizes from the two machines, as shown in Figure \@ref(fig:compare-libs). 
 
 ```{r compare-libs, fig.cap = "Library sizes between sequencing machines. We observe excellent correlation between library sizes of the two sequencing machines, particularly for the real cell libraries."}
 
@@ -351,9 +355,12 @@ totfrac_2500 = sum(libs_2500$mapped[!libs_2500$expected])/sum(libs_2500$mapped[l
 
 ```
 
-In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode combinations. The unexpected combinations have a median library size of `r format(mappedfrac_2500*100, digits = 2)`% the median size of the expected combinations (vs. `r format(mappedfrac*100, digits = 2)`% from HiSeq 4000). Considering all mapped reads on the plate, there are `r format(totfrac_2500*100, digits = 2)`% in the unexpected combinations as in the expected ones (vs. `r format(totfrac*100, digits = 2)`% from HiSeq 4000).
+In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode combinations. 
+The unexpected combinations have a median library size of `r format(mappedfrac_2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(mappedfrac*100, digits = 2)`% from HiSeq 4000). 
+Considering all mapped reads on the plate, there are `r format(totfrac_2500*100, digits = 2)`% in the unexpected combinations as in the expected ones (compared to `r format(totfrac*100, digits = 2)`% from HiSeq 4000).
 
-We have applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data. The fit and data is displayed graphically in Figure \@ref(fig:model-2500)
+We have applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data. 
+The fit and data is displayed graphically in Figure \@ref(fig:model-2500).
 
 ```{r model-2500, fig.cap="Model fit for HiSeq 2500 data. A similar trend as for the HiSeq 4000 data can be observed."}
 
@@ -393,10 +400,12 @@ ggplot(df, aes(x = tot, y = mapped)) +
 
 ```
 
-Interestingly, we do still observe the swapping pattern. However, the swapping rate estimated is around an order of magnitude lower on the HiSeq 2500: `r format(coef(summary(mod_mapped_2500))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped_2500))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500 vs. `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
+Interestingly, we still observe the swapping pattern in the HiSeq 2500 data. 
+However, the estimated swapping rate is approximately an order of magnitude lower: `r format(coef(summary(mod_mapped_2500))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped_2500))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500, compared to `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
 
-#Plate-based analysis: Nestorowa data
-##Introduction to data
+# Plate-based analysis: Nestorowa data
+
+## Introduction to data
 
 ```{r load-blood}
 #Load the 4000/2500 blood data
