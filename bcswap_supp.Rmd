@@ -179,8 +179,8 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
 
 ## Swapping rate estimation
 
-Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ lies along rows in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ lies along columns ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
-Let $M_{i,j}$ denote the number of true molecules for this combination, and let $X_{i,j}$ denote the number of mapped reads.
+Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ represents a row in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ represents a column ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
+Let $M_{i,j}$ denote the number of seeded cDNA molecules that truly originate from this combination, and let $X_{i,j}$ denote the number of mapped reads.
 Impossible barcode combinations are those with $1 \leq i \leq 8, 1\leq j \leq 12$ or $9\leq i \leq 16, 13\leq j \leq 24$, and have $M_{i,j}=0$ by definition.
 
 We assume that barcode swapping is rare, so it is unlikely that one molecule will undergo more than one round of swapping. 
@@ -208,16 +208,19 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
 
 We further assume that number of observed swapped reads is proportional to the number of molecules that are available for swapping. 
 Define $r$ as the rate of swapping from any single donor library to any single recipient library, i.e., the proportion of molecules in the donor library that appear as mislabelled reads in the recipient.
+Let $c$ be the conversion rate of seeded cDNA molecules to mapped reads. 
 For each barcode combination, the number of reads can be modelled as 
 
-$$\bar{X}_{i,j} = M_{i, j} + r \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right)$$
+$$\bar{X}_{i,j} = cM_{i, j} + r \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \;. $$
 
-by assuming that each seeded molecule gives rise to one read.
+As barcode swapping is rare, $r$ should be very low such that $\bar{X}_{i,j} \approx cM_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
+We further approximate $\bar{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
+This means that, for each impossible combination $(i_0, j_0)$, we have 
 
-We subsequently estimate $r$ by minimizing the sum of $(X_{i,j} - \bar{X}_{i,j})^2$ across all $(i, j)$, using an iterative least-squares method.
-For a given $r$, the above expression yields a linear system where all $M_{i,j}$ are the unknown variables and all $X_{i,j}$ are the observations.
-The solution to this linear system minimizes the residual sum of squares _for this specific_ $r$.
-We repeat this procedure with different $r$ until we obtain the lowest residual sum of squares - the value $r$ at which this occurs is taken as our estimate.
+$$\bar{X}_{i_0,j_0} \approx \frac{r}{c} \left( \sum_{k \neq j_0} X_{i,k} + \sum_{l \neq i_0} X_{l,j}\right) \;. $$
+
+This represents a linear relationship between the number of mapped reads (i.e., library size) for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
+Such a line can be fitteed using ordinary least squares, as shown in Figure \@ref(fig:correlation).
 
 <!--
 The experimental design results in cells being seeded in two blocks of 96 wells (see Figure \@ref(fig:richard-schematic)), corresponding to $1 \leq i \leq 8$, $13 \leq j \leq 24$ and $9 \leq i \leq 16$, $1 \leq j \leq 12$. 
@@ -225,9 +228,6 @@ Remaining barcode combinations (in the off-diagonal blocks) were not seeded with
 Additionally the well with index $i=1,j=24$ was empty by design.
 -->
 
-
-using ordinary least squares. 
-Data and the model fit are shown in Figure \@ref(fig:correlation).
 
 ```{r correlation, fig.cap="Swapping model fit. The one-barcode-distant available transcript and observed swapped transcript counts are shown, with the model fit described above overlaid."}
 
@@ -272,12 +272,18 @@ df_4000 = df
 
 ```
 
-Consider the units of $\beta$, the slope of the regression above. 
-This represents the fraction of reads across the 20 expected combinations (donors) that are contributed to each impossible combination (recipient) due to barcode swapping.
-Thus, assuming that the contribution rate is constant across libraries, each donor library contributes a fraction $\beta$ of its reads to each recipient library.
+We estimate the total number of mislabelled reads across all combinations to be
 
-However, recall that we defined the swapping rate as the fraction of reads that are mislabelled due to swapping across _all_ multiplexed samples.
-On this plate, there are 38 available destinations for a single-barcode-swapped read from any single donor library, as shown in Figure \@ref(fig:swap-schematic-receive). 
+$$
+\begin{aligned}
+& r \sum_{i=1}^{16} \sum_{j=1}^{24} \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \\
+& \approx \frac{r}{c}\sum_{(i,j) \in \mathcal{E}} \left( \sum_{k \neq j} X_{i,k} + \sum_{l \neq i} X_{l,j}\right) \\
+& = \frac{38 r}{c} \sum_{(i,j) \in \mathcal{E}} X_{i,j}
+\end{aligned}
+$$
+
+where $\mathcal{E}$ is a set of all expected combinations.
+The multiplication by 38 is due to the fact that there are 38 available destinations for a single-barcode-swapped read from any single expected combination (Figure \@ref(fig:swap-schematic-receive)). 
 This includes the impossible barcode combinations as well as the real cell combinations.
 
 <!-- The slope ($\beta$) is `r format(coef(summary(mod_mapped))[2,1], digits = 3, nsmall = 3)`, which corresponds to the rate at which barcode swapped molecules appear in the single unexpected barcode combination libraries from the 20 donor libraries (see Figure \@ref(fig:swap-schematic-source)). However, because the 20 donor libraries are also contributing swaps to each of the 20 recipient libraries on their row and column, the slope $\beta$ actually corresponds to the rate of incoming swapped transcripts per recipient per donor. -->
@@ -306,11 +312,13 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
 
 ```
 
-Therefore, the swapping rate in this experiment $R$ is $38\beta$:
+To obtain the swapping fraction in this experiment, we divide by the total number of mapped reads:
 
-$$[R] = \frac{38~\text{recipients}}{\text{donor}} \times\frac{\text{swapped reads}/recipient}{\text{original reads}/donor} = \frac{\text{swapped reads}}{\text{original reads}}$$
+$$
+\frac{38 r}{c} \left( \frac{\sum_{(i,j) \in \mathcal{E}} X_{i,j}}{\sum_{i=1}^{16} \sum_{j=1}^{24} X_{i,j}} \right)
+$$
 
-This provides an estimated swapping rate of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%. 
+This yields an estimated swapping rate of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%. 
 Notably, this is higher than the median-to-median fraction of `r format(mappedfrac*100, digits = 2)`%. 
 This is because the median-to-median fraction only considered swapped reads arriving in the unexpected barcode combinations, whereas this slope-estimated value considers reads swapping across the entire set of barcode combinations.
 
