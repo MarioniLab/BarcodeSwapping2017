@@ -516,9 +516,9 @@ plot_out
 
 ```
 
-These crosshair patterns show that swapping along rows and columns is the primary mode by which swapping occurs. This is likely because swapping is a rare event, so for swapping to affect both ends of a transcript is rare ($0.5p_{swap}^2$, as swaps must occur at opposite ends of the molecule). This justifies our focus on row-column swapping in these sections.
+These crosshair patterns show that swapping along rows and columns is the primary mode by which swapping occurs. This is likely because swapping is a rare event, so swapping of both barcodes of the same transcript is especially rare. This justifies our focus on row-column swapping in these sections.
 
-However, it is possible that there are some more subtle effects - for example, an excess of barcode for a particular row or column of a plate may result in a greater amount of swapping to barcode combinations that contain this particular barcode. We cannot readily consider these, as library quantification captures quantities of DNA lengths, not of their sequence content, so different barcodes are indistinguishable.
+<!-- It is possible that there are some more subtle effects - for example, an excess of barcode for a particular row or column of a plate may result in a greater amount of swapping to barcode combinations that contain this particular barcode. However, this is difficult to quantify -->
 
 ##Quantifying swapping rate
 
@@ -1463,11 +1463,11 @@ The data we used were generated using the 10X Chromium system, where the manufac
 
 We can test for deviations in the observed rate of sharing against the null using a hypergeometric test. This test uses the hypergeometric distribution, which describes the expeected number of "successes" for drawing without replacement. For our data, we apply sample pairwise testing, as particular samples may be more compromised by swapping than others.
 
-For sample 1, we have $n_1$ barcodes that have been called as cells, and for sample 2 $n_2$ barcodes that have been called as cells. The 737,280 cell barcodes supplied by 10X is referred to as $N$. The number of shared barcodes is $S$.
+For samples 1 and 2, we have $n_1$ and $n_2$ barcodes, respectively, that have been called as cells. The 737,280 cell barcodes supplied by 10X is referred to as $N$. The number of shared barcodes observed between samples 1 and 2 is $S$.
 
-We consider the sampling of sample 2's $n_2$ barcodes as repeated drawing from the $N$ set of barcodes, of which the drawing of $n_1$ particular barcodes (those from sample 1) consitute a success.
+We consider the sampling of sample 2's $n_2$ barcodes as repeated draws from the total set of $N$ barcodes, of which the drawing of $n_1$ particular barcodes (those from sample 1) consitute a success.
 
-Under the null hypothesis, cell barcodes are drawn at random, and there is no increased incidence of barcode sharing. In this case, the rate of sharing of barcodes between samples should follow the hypergeometric distribution for each sample's values of $n$. We test the observed rate of sharing $S$ against the distribution i.e. how often would we expect to see a result as severe or more severe (i.e. equally many or more shared barcodes) given random drawing of barcodes from the pool? 
+Under the null hypothesis, cell barcodes are drawn at random, and there is no increased incidence of barcode sharing. In this case, the number of shared barcodes between samples should follow a hypergeometric distribution. We test the observed $S$ against this distribution i.e. how often would we expect to see a result as or more extreme (i.e. $\geq S$) given random drawing of barcodes from the pool? 
 
 ```{r 10x-functions}
 
@@ -1544,7 +1544,7 @@ if(any(p.adjust(good_comp$p, method = "fdr")!=1))
 ```
 
 
-None of the p-values for any comparison is significant after FDR correction at any significance level (all $q=1$). The high density of $p=1$ values arise when two samples share no barcodes. Therefore we do not observe any excess of sharing in this data.
+None of the p-values for any comparison is significant after FDR correction at any significance level (all adjusted p-values equal to 1). The high density of $p=1$ values arise when two samples share no barcodes. Therefore we do not observe any excess of sharing in this data.
 
 ###Dataset 2
 
@@ -1623,7 +1623,7 @@ sig_row = which.min(samp3_comp$p)
 
 This data was also generated using the 10X Genomics Chromium system, with four samples of human xenograft cells varying in size between `r as.numeric(max(table(samp3$sample)))` and `r as.numeric(min(table(samp3$sample)))` called cells. Libraries were sequenced on a HiSeq 4000, and data was processed using CellRanger 1.3.1 using default arguments.
 
-Of the `r nrow(samp3)` barcodes, `r as.numeric(table(table(samp3$barcode))[2])` barcodes were observed twice, with none observed three times or more. Our pairwise comparison method identifies one significant excess of sharing after FDR correction (q = `r format(min(p.adjust(samp3_comp$p, method = "fdr")), digits = 3)`). Here, `r samp3_comp$shared[sig_row]` barcodes were shared compared to an expected value of `r format(mean(rhyper(100000, m = samp3_comp$n1[sig_row], k = samp3_comp$n2[sig_row], n= 750000)), digits = 3)` for samples of size `r samp3_comp$n1[sig_row]` and `r samp3_comp$n2[sig_row]`. 
+Of the `r nrow(samp3)` barcodes, `r as.numeric(table(table(samp3$barcode))[2])` barcodes were observed twice, with none observed three times or more. Our pairwise comparison method identifies one significant excess of sharing after FDR correction (adjusted p-value of `r format(min(p.adjust(samp3_comp$p, method = "fdr")), digits = 3)`). Here, `r samp3_comp$shared[sig_row]` barcodes were shared compared to an expected value of `r format(mean(rhyper(100000, m = samp3_comp$n1[sig_row], k = samp3_comp$n2[sig_row], n= 750000)), digits = 3)` for samples of size `r samp3_comp$n1[sig_row]` and `r samp3_comp$n2[sig_row]`. 
 
 Figure \@ref(fig:plot-d3) shows p-values from the hypergeometric tests between every pair of samples.
 
