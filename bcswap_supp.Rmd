@@ -80,8 +80,9 @@ Before continuing, we define a few terms:
 
 * The swapping rate is defined as the fraction of reads that have been mislabelled, from the set of all cDNA reads in a pool of multiplexed libraries sequenced on a single flow cell lane.
 
-#Plate-based analysis: Richard data
-##Introduction to data
+# Plate-based analysis: Richard data
+
+## Description of the experimental design
 
 ```{r load-richard}
 
@@ -95,7 +96,10 @@ libs_2500$expected[libs_2500$empty_well] = FALSE
 
 ```
 
-In the first dataset analysed, we consider two 96-well plates of single-cell RNA-seq libraries (mouse blood cells). We used dual indices for cell labelling (a different barcode was used  at each end of the molecule). The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). For sequencing, all cell libraries from the two plates were multiplexed. 
+We consider two 96-well plates of single-cell RNA-seq libraries for mouse blood cells. 
+We used dual indices for cell labelling i.e. a different barcode was used at each end of the molecule. 
+The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). 
+For sequencing, all cell libraries from the two plates were multiplexed. 
 
 ```{r richard-schematic, fig.cap="Richard data experimental design. Cells were seeded in each of the orange positions in the plot. Neither set of barcodes used for a given 96-well plate were used in the other. One barcode combintion (N729,S522) was left without a cell. Each orange block is a single 96-well plate. Grey positions are locations where we do not expect to see sequencing reads."}
 
@@ -108,18 +112,31 @@ ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
 
 ```
 
-Cells were prepared for single-cell RNA-seq by the SmartSeq2 protocol[@picelli_full-length_2014] with the following modifications. Cells were sorted into 96-well plates holding 4 $\mu$L of lysis buffer composed of 2.3 U SUPERase In RNase inhibitor (Thermo Fisher Scientific), 0.11 % (v/v) Triton X-100 (Sigma), 12.5 mM DTT (Thermo Fisher Scientific), and 2.5 mM dNTP mix (Thermo Fisher Scientific). 1 $\mu$L annealing mix containing diluted ERCC RNA Spike-In Mix (Thermo Fisher Scientific) and 10 µM oligo-dT30VN (Sigma) was added to each well before to reverse transcription with SuperScript II (Invitrogen). cDNA amplification was performed with 23 PCR cycles and the resulting PCR products purified with Ampure XP Beads (Agencourt) at a volume ratio of 0.7:1 beads:DNA. Libraries were prepared using Nextera XT DNA Sample Preparation Kit and indexes from the Nextera XT Index Kit v2 Set A and Nextera XT Index Kit v2 Set D (Illumina). Each plate of libraries was pooled, cleaned with Ampure XP beads, and quantitated using KAPA Library Quantification Kit (Roche). Equimolar quantities of libraries from each plate were combined for sequencing.
+## Details of data generation
 
-Read mapping was performed using Subread (v1.5.1; considering uniquely mapped reads and with Phred offset of 33, with otherwise default parameters) using the Ensembl mm10 genome with ERCC92 annotation.
-
-Reads were counted using the featureCounts function in the Rsubread package `r Biocpkg("Rsubread")` (default options, except minMQS=10) using the Ensembl mm10 GTF file, and Thermo-Fisher ERCC92 GTF (see the [Marioni Lab Github](https://github.com/MarioniLab/CommonResources)).
+Cells were prepared for single-cell RNA-seq by the SmartSeq2 protocol [@picelli_full-length_2014] with the following modifications. 
+Cells were sorted into 96-well plates holding 4 $\mu$L of lysis buffer composed of 2.3 U SUPERase In RNase inhibitor (Thermo Fisher Scientific), 0.11 % (v/v) Triton X-100 (Sigma), 12.5 mM DTT (Thermo Fisher Scientific), and 2.5 mM dNTP mix (Thermo Fisher Scientific). 
+1 $\mu$L annealing mix containing diluted ERCC RNA Spike-In Mix (Thermo Fisher Scientific) and 10 µM oligo-dT30VN (Sigma) was added to each well before to reverse transcription with SuperScript II (Invitrogen). 
+cDNA amplification was performed with 23 PCR cycles and the resulting PCR products purified with Ampure XP Beads (Agencourt) at a volume ratio of 0.7:1 beads:DNA. 
+Libraries were prepared using Nextera XT DNA Sample Preparation Kit and indexes from the Nextera XT Index Kit v2 Set A and Nextera XT Index Kit v2 Set D (Illumina). 
+Each plate of libraries was pooled, cleaned with Ampure XP beads, and quantitated using KAPA Library Quantification Kit (Roche). 
+Equimolar quantities of libraries from each plate were combined for sequencing.
 
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
+Read mapping was performed using the _Subread_ aligner (v1.5.1) to the Ensembl mm10 genome with ERCC92 annotation.
+We used a Phred offset of 33 and only considered uniquely mapped reads, with default values for all other parameters.
+We counted the number of reads mapped to each gene in each cell using the `featureCounts` function in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`).
+This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file, or to spike-in transcripts in the Thermo-Fisher ERCC92 GTF (see https://github.com/MarioniLab/CommonResources for details).
 
-In the absence of barcode swapping, it should be impossible to observe mapped reads with barcodes from each of the two different plates, i.e., there should be no mapped reads in the grey areas of Figure \@ref(fig:richard-schematic). We will refer to these barcode combinations as "impossible" combinations, in comparison to the expected combinations in orange. Note that we consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from e.g. human or bacterial sources (especially in the empty well).
+## Data overview
 
+In the absence of barcode swapping, it should be impossible to observe mapped reads with barcodes from each of the two different plates, i.e., there should be no mapped reads in the grey areas of Figure \@ref(fig:richard-schematic). 
+We will refer to these barcode combinations as "impossible" combinations, in comparison to the expected combinations in orange. 
+Note that we only consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from e.g. human or bacterial sources (especially in the empty well).
 
-We plot in Figure \@ref(fig:present-richard) the observed numbers of mapped reads for each barcode combination. Where cells have been loaded, there are many mapped reads (yellow/green areas). In the impossible barcode combinations we observe a lower but non-zero number of mapped reads.
+Figure \@ref(fig:present-richard) shows the observed numbers of mapped reads for each barcode combination. 
+Where cells have been loaded, there are many mapped reads (yellow/green areas). 
+In the impossible barcode combinations we observe a lower but non-zero number of mapped reads.
 
 ```{r present-richard, fig.cap="Number of mapped read per barcode combination. The number of mapped reads is shown for each barcode combination, as a log10 count."}
 
@@ -137,9 +154,11 @@ totfrac = sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
 
 ```
 
-
-
-The distribution of these library sizes are shown in Figure \@ref(fig:richard-boxplot) below. The impossible combinations have a median library size that is `r format(mappedfrac*100, digits = 2)`% of the median size of the expected combinations. The corresponding value for all reads (i.e. mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%. Considering all mapped reads on the plate, there are `r format(totfrac*100, digits = 2)`% in unexpected combinations relative to the expected combinations. Note that we consider the empty well to be an ``impossible'' barcode combination though it does contain a low level of mapped ERCC spike-in reads.
+The distribution of these library sizes are shown in Figure \@ref(fig:richard-boxplot) below. 
+The impossible combinations have a median library size that is `r format(mappedfrac*100, digits = 2)`% of the median size of the expected combinations. 
+The corresponding value for all reads (i.e. mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%.
+The total number of mapped reads assigned to impossible combinations is `r format(totfrac*100, digits = 2)`% of that assigned to expected combinations. 
+Note that we consider the empty well to be an "impossible" barcode combination though it does contain a low level of mapped ERCC spike-in reads.
 
 ```{r richard-boxplot, fig.cap="Mapped library sizes of seeded and unseeded wells. The library sizes of the unexpected barcode combinations (i.e. wells without cells) are lower than those of the expected combinations (wells with cells), but considerably larger than 0.", message = FALSE, warning = FALSE}
 
