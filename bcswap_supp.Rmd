@@ -1,11 +1,23 @@
 ---
 title: "Supplementary material: Detection and removal of barcode swapping from single-cell RNA-seq data"
 author:
-- Jonathan A. Griffiths
-- Aaron T.L. Lun
-- Arianne C. Richard
-- Karsten Bach
-- John C. Marioni
+- name: Jonathan A. Griffiths
+  affiliation:
+  - &cruk Cancer Research UK Cambridge Institute, University of Cambridge, CB2 0RE, United Kingdom
+- name: Aaron T.L. Lun
+  affiliation:
+  - *cruk
+- name: Arianne C. Richard
+  affiliation: 
+  - *cruk
+- name: Karsten Bach
+  afiliation:
+  - Department of Pharmacology, University of Cambridge, CB2 1PD, United Kingdom
+- name: John C. Marioni
+  affiliation:
+  - *cruk
+  - EMBL European Bioinformatics Institute (EMBL-EBI), Wellcome Genome Campus, CB10 1SD, Hinxton, United Kingdom
+  - Wellcome Trust Sanger Institute, Wellcome Genome Campus, CB10 1SA, Hinxton, United Kingdom
 date: "24/07/2017"
 output:
   BiocStyle::html_document:
