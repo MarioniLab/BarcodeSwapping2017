@@ -215,12 +215,12 @@ $$\bar{X}_{i,j} = \tau M_{i, j} + \rho \left( \sum_{k \neq j} M_{i,k} + \sum_{l 
 
 As barcode swapping is rare, $r$ should be very low such that $\bar{X}_{i,j} \approx cM_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
 We further approximate $\bar{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
-This means that, for each impossible combination $(i_0, j_0)$, we have 
+This means that, for each impossible combination $(i^*, j^*)$, we have 
 
-$$\bar{X}_{i_0,j_0} \approx \frac{\rho}{\alpha} \left( \sum_{k \neq j_0} X_{i,k} + \sum_{l \neq i_0} X_{l,j}\right) \;. $$
+$$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\alpha} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
 
 This represents a linear relationship between the number of mapped reads (i.e., library size) for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
-We estimate the parameters of this relationship by fitting a line to each $X_{i_0,j_0}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
+We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
 
 <!--
 The experimental design results in cells being seeded in two blocks of 96 wells (see Figure \@ref(fig:richard-schematic)), corresponding to $1 \leq i \leq 8$, $13 \leq j \leq 24$ and $9 \leq i \leq 16$, $1 \leq j \leq 12$. 
@@ -576,9 +576,10 @@ Thus, we will focus on row-column swapping in the following sections.
 
 ## Quantifying the swapping fraction
 
-To quantify the swapping fraction, we applied a model that identifies contributions of different cells in the HiSeq 2500 data (treating this as a baseline, low-swapping system) to the swapping-affected transcriptomes of the HiSeq 4000 data. 
-Let $Y_{4000}$ denote the $G\times C$ count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
-Position $(g, c)$ of this matrix corresponds to the expression level of gene $g$ in cell $c$. 
+To quantify the swapping fraction, we assume that the HiSeq 2500 data contains negligible amounts of barcode swapping compared to the HiSeq 4000.
+This means that the HiSeq 2500 data can be treated as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
+We applied a model that identifies contributions of different cells in the HiSeq 2500 data to the swapping-affected transcriptomes of the HiSeq 4000 data. 
+Let $Y_{4000}$ denote the $G\times C$ read count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
 Let $Y_{2500}$ denote the equivalent count matrix for the HiSeq 2500 libraries.
 
 Let $R$ denote a $C \times C$ matrix capturing the contribution of the HiSeq 2500 counts to the HiSeq 4000 counts. 
@@ -587,20 +588,32 @@ To illustrate; consider the entry $(c_1, c_2)$ in $R$, and multiply this value b
 This represents the number of reads from cell $c_1$ in the HiSeq 2500 data that are contributed to cell $c_2$ in the HiSeq 4000 data.
 
 For a cell with a given pair of barcodes, we want to discriminate between the contribution of other cells with exactly one shared barcode and other cells with no shared barcodes.
-To do this, the element $(c_1, c_2)$ of $R$ is defined as
+To do this, let $R = R_0 + R_1 + R_2$ where each of $R_0$, $R_1$ and $R_2$ is a matrix of the same dimensions as $R$.
+The element $(c_1, c_2)$ of each matrix is defined as
 
-$$ \begin{cases}
-\alpha &  \text{if cells $c_1$ and $c_2$ share both barcodes},\\
-\beta &  \text{if cells $c_1$ and $c_2$ share exactly one barcode},\\
-\gamma & \text{if cells $c_1$ and $c_2$ share no barcodes}.
-\end{cases} $$
+$$ 
+\begin{aligned}
+R_0[c_1, c_2] &= \begin{cases}
+\gamma &  \text{if cells $c_1$ and $c_2$ share no barcodes}\\
+0 & \text{otherwise} 
+\end{cases} \\
+R_1[c_1, c_2] &= \begin{cases}
+\beta &  \text{if cells $c_1$ and $c_2$ share exactly one barcode}\\
+0 & \text{otherwise}
+\end{cases} \\
+R_2[c_1, c_2] &= \begin{cases}
+\alpha & \text{if cells $c_1$ and $c_2$ share no barcodes}\\
+0 & \text{otherwise}
+\end{cases}
+\end{aligned}
+$$
 
-The value of $\alpha$ depends on differences in sequencing depth between the two machines.
+The value of $\alpha$ represents differences in sequencing depth between the two machines.
 The value of $\beta$ depends on the row-column swapping fraction, while $\gamma$ captures swapping between barcode combinations that do not share any barcodes.
 
 We then define the relationship between the two count matrices as:
 
-$$ Y_{4000} = Y_{2500} M + \epsilon$$
+$$ Y_{4000} = Y_{2500} R + \epsilon$$
 
 where $\epsilon$ represents the residual error. 
 The aim is to obtain estimates of $\alpha$, $\beta$, and $\gamma$ for each plate, using information across many genes to stabilise the estimates.
@@ -639,7 +652,8 @@ This poses a problem for our model: for gene B, it is harder for the model to di
 By contrast, gene A is expressed at a high level in only very few cells; it is therefore easier for the model to distinguish between large values of $\beta$ and $\gamma$. 
 Genes that are expressed broadly in the manner of gene B are therefore less informative than genes like gene A for the model fit. 
 
-In order to capture the most informative genes, we first subset by expression levels: genes are retained if they are present at a minimum level of 500 counts in at least one cell in the HiSeq 2500 data. 
+In order to capture the most informative genes, we first subset the count matrices $Y_{2500}$ and $Y_{4000}$ by expression levels.
+Genes (i.e., rows) are retained if they are present at a minimum level of 500 counts in at least one cell in the HiSeq 2500 data. 
 It is important to have a large number of transcripts present, otherwise swapping may be too rare to detect.
 Then, to find informative genes, we rank them according to their maximum expression on the plate divided by the 90th percentile expression. 
 This value will be highest when only a very few cells are highly expressing a gene.
@@ -672,6 +686,7 @@ ggplot(plot_df, aes(y = score, x = index)) +
 
 In these plates, the top 250 genes contain most of the informative genes. 
 We consider 500 genes to ensure that we include the infinite ratios (i.e. where the 90th percentile is 0, the ratio is not defined) and do not exclude informative genes for other plates, which may have longer tails to the distributions shown. above.
+Only the subset of genes/rows in $Y_{2500}$ and $Y_{4000}$ are used in the downstream model fitting.
 We have also run fits considering both 250 genes and 1000 genes, and obtain similar parameter estimates (shown below, in Figure \@ref(fig:genes-var)).
 
 Notably, the maximum expression value on a plate does not substantially drive selection of genes, shown for two plates in Figure \@ref(fig:gene-selection-max).
@@ -700,9 +715,9 @@ ggplot(plot_df, aes(x = max, y = score, col = factor(keep))) +
 
 ```
 
-We use Poisson precision weights in our model to account for the mean-variance relationship of count data.
+We used Poisson precision weights in our model to account for the mean-variance relationship of count data.
 Counts were weighted by the reciprocal of the square-root of their gene's mean expression, to prevent the most highly expressed genes dominating the least-squares fit. 
-A constrained linear inverse model was used for the fit to avoid obtaining negative values of $\alpha$, $\beta$, and $\gamma$ (using the `r CRANpkg("lsei")` package).
+We fitted a constrained linear inverse model using the `r CRANpkg("lsei")` package, to avoid obtaining negative values of $\alpha$, $\beta$, and $\gamma$. 
 Gene subsetting and fitting of the model was performed separately for each plate of cells, so each plate uses its own informative gene set.
 
 ```{r estimate-rate}
@@ -1072,11 +1087,18 @@ adjust_sample = sweep(adjust_sample, 1, rowSums(adjust_sample), "/")
 
 Across the `r length(swap_split)` plates assayed, we acquired a distribution of fitted values (`r format(min(const[,2]), digits = 3)` to `r format(max(const[,2]), digits = 3)`) for the single shared barcode contribution term $\beta$.
 
-To quantify how much of a cell's transcriptome derives from all other cells that share exactly one or exactly no barcodes, we multiplied $\beta$ and $\gamma$ by 18 and 77, respectively. Here, 18 and 77 correspond to the number of entries in each column (or row) of $M$ that are $\beta$ or $\gamma$, respectively. In other words, they are for each cell the number of other cells on the plate that share exactly one or no barcodes.
+To quantify the swapping fraction, we estimated the number of reads in the HiSeq 4000 libraries that were contributed from the HiSeq 2500 libraries via swapping.
+We include both single barcode swaps ($M_1$) and double barcode swaps ($M_0$) in this estimate.
+We divided this by the total number of reads in the fitted model (i.e., $Y_{2500}M$) to obtain an estimate of the swapping fraction for each plate.
 
-We then normalised the estimates to ensure that $\alpha + \beta + \gamma = 1$, as we wish to examine the fraction of HiSeq 4000 counts that are derived from other cells, which is the swapping rate. Across plates, the mean contributions from the single barcode sharing cells (i.e. $\beta$) was estimated to be `r format(mean(const_adjusted[,2])*100, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
+$$
+Y_{2500} \frac{(M_0 + M_1)}{M}
+$$
 
-Similar results were also obtained with 250 (`r format(mean(adjust_250[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_250[,2])/nrow(adjust_250))*100, digits = 3)`%) or 1000 (`r format(mean(adjust_1000[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_1000[,2])/nrow(adjust_1000))*100, digits = 3)`%) genes considered per plate. Similarly, when 500 genes were chosen at random from the top 1000 ranked genes per plate, results were also concordant (`r format(mean(adjust_sample[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_sample[,2])/nrow(adjust_sample))*100, digits = 3)`%)
+Across plates, the mean contributions from the single barcode sharing cells (i.e. $\beta$) was estimated to be `r format(mean(const_adjusted[,2])*100, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
+
+Similar results were obtained with the top 250 (`r format(mean(adjust_250[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_250[,2])/nrow(adjust_250))*100, digits = 3)`%) or 1000 (`r format(mean(adjust_1000[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_1000[,2])/nrow(adjust_1000))*100, digits = 3)`%) most informative genes per plate. 
+We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates of the swapping fraction (`r format(mean(adjust_sample[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_sample[,2])/nrow(adjust_sample))*100, digits = 3)`%).
 
 ```{r plot-contrib, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. Different fitted values may derive from truly different swapping rates, or differences in the number of informative genes."}
 
@@ -1086,11 +1108,14 @@ hist(const_adjusted[,2], breaks = 20, xlim = c(0, 0.06), main = "", xlab = "Fitt
 
 ```
 
+In our framework above, we have ignored any swapping in the HiSeq 2500 data to estimate the swapping fraction in the HiSeq 4000 data.
+Technically, our estimates represent an *increase* in the swapping fraction in the HiSeq 4000 data compared to the HiSeq 2500 data.
+Nonetheless, they are consistent with the rate of swapping calculated in the Richard dataset above. 
+Assuming that HiSeq 2500 swapping occurs at a rate of 1/10th the rate of HiSeq 4000 swapping (based on Richard data, and the crosshair patterns shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000)), we could estimate an absolute HiSeq 4000 swapping fraction in the Nestorowa data by multiplying our swapping fraction estimates by 1.1. 
+This gives an estimate of `r format(mean(const_adjusted[,2])*100*1.1, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100*1.1, digits = 3)`%, which is consistent with the absolute swapping rate estimated from the Richard data of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)` $\pm$ `r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%.
 
-These values provide an estimated *increase* in swapping rate in the HiSeq 4000 data compared to the HiSeq 2500 data, not an absolute estimate. Nonetheless, these values are consistent with the rate of swapping calculated in the Richard dataset above. Assuming that HiSeq 2500 swapping occurs at a rate of 1/10th the rate of HiSeq 4000 swapping (based on Richard data, and the crosshair patterns shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000)), we could estimate an absolute HiSeq 4000 swapping rate in this data by multiplication of the relative HiSeq 4000 estimate by a factor of 1.1. This gives an estimate from the Nestorowa data of `r format(mean(const_adjusted[,2])*100*1.1, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100*1.1, digits = 3)`%, which is consistent with the absolute swapping rate estimated from the Richard data of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%.
-
-Contributions for the cells that share no barcodes (i.e. using $\gamma$) are shown in Figure \@ref(fig:plot-contrib-offrow). 
-Despite there being many more cells that could contribute in this manner, the total contribution is low, and in many cases estimated to be 0.
+The swapping fraction estimates for the cells that share no barcodes are shown in Figure \@ref(fig:plot-contrib-offrow). 
+This is calculated as $Y_{2500}M_0/M$ and is close to zero, consistent with the expected rarity of double barcode swaps.
 
 ```{r plot-contrib-offrow, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. "}
 
@@ -1122,7 +1147,8 @@ ggplot(data.frame(genes = genes, rate = rate_est, plate = rep(1:16, 4)),
 
 ```
 
-Additionally, the mean value of the gene selection score used (the maximum expression on each plate divided by the 90th percentile) for the top 500 genes (excluding `Inf`) does not affect the predicted swapping rate, shown in Figure \@ref(fig:genes-inf). In other words, it is not the absence abundance of sporadically expressed genes that causes estimates of different swapping rates.
+Additionally, the mean value of the gene selection score (i.e., the maximum expression on each plate divided by the 90th percentile) for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
+This indicates that the expression abundance of sporadically expressed genes does not drive differences in the swapping fraction estimates.
 
 ```{r genes-inf, fig.cap="Swapping rate estimation is independent of the selected gene influence. The mean gene score (the maximum expression on each plate divided by the 90th percentile) for the first 500 genes on each plate (excluding Inf) does not affect the estimated swapping rate."}
 
@@ -1145,11 +1171,14 @@ ggplot(data.frame(mean = means, rate = const_adjusted[,2]),
 ```
 
 
-### Linking swapping rate to library characteristics
+## Linking swapping rate to library characteristics
 
-@sinha_index_2017 increased the swapping rate by titrating larger and larger amounts of free barcode into their sequencing libraries. However, this does not explain by itself the diversity of swapping rates that we observe for conventionally designed sequencing libraries.
+@sinha_index_2017 increased the swapping rate by titrating larger amounts of free barcode into their sequencing libraries. 
+However, this does not, by itself, explain the diversity of swapping rates that we observe for conventionally designed sequencing libraries.
 
-To understand swapping in this data, we have recorded the molarity of the library at different molecule lengths from the bioanalyzer software package. In particular, we have considered library barcodes as lengths 40-75bp, and sequenced cDNA as lengths 400-800bp. A screenshot from bioanalyzer's Expert software is shown in Figure \@ref(fig:expert).
+To understand swapping in this data, we have recorded the molarity of the library at different molecule lengths from the Bioanalyzer software package. 
+In particular, we have considered library barcodes at 40-75 bp, and sequenced cDNA at 400-800 bp. 
+A screenshot from Bioanalyzer's Expert software is shown in Figure \@ref(fig:expert).
 
 ```{r expert, fig.cap="Bioanalyzer screenshot. The range 40-75bp corresponds to free DNA barcode, while cDNA lengths of 400-800bp are those that are expected to be sequenced in HiSeq 4000."}
 
@@ -1157,7 +1186,7 @@ knitr::include_graphics(paste0(folder_location, "/figs/bioanalyzer.png"))
 
 ```
 
-The molarities of each sample are shown in Figure \@ref(fig:load-bioanalyzer), overlaid with the calculated swapping rates. The swapping rates shown here include single and double barcode swaps.
+The molarities of each sample are shown in Figure \@ref(fig:load-bioanalyzer), overlaid with the calculated swapping rates. 
 
 ```{r load-bioanalyzer, fig.wide = TRUE, fig.cap = "bioanalyzer-calculated molarites and swapping rates"}
 
@@ -1212,7 +1241,9 @@ ggplot(plot_df, aes (x = bc_mol, y= seq_mol, col = swap_rate, size = swap_rate))
 
 ```
 
-There does not appear to be any consistent pattern across these measures. In Figure \@ref(fig:plot-rates), the swapping rates are plotted directly against the molarity of free barcode.
+We do not observe any obvious association between these measures. 
+
+In Figure \@ref(fig:plot-rates), the swapping rates are plotted directly against the molarity of free barcode.
 
 ```{r plot-rates, fig.cap = "Swapping rate is not driven by free barcode molarity"}
 
@@ -1227,9 +1258,10 @@ model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol))
 
 ```
 
-Notably, there is no obvious correlation (i.e. the gradent in a OLS linear model is not different from 0, p=`r format(coef(summary(model))[2,4], digits = 3)`).
+The gradient in a linear model fitted to the swapping fraction against the barcode molarity is not significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`).
+This reflects the absence of a clear association between these two values.
 
-Similar behaviour is seen for the ratio of free barcode to captured cDNA, as shown in Figure \@ref(fig:plot-ratio).
+Similar behaviour is observed for the ratio of free barcode to captured cDNA, as shown in Figure \@ref(fig:plot-ratio).
 
 ```{r plot-ratio, fig.cap = "Swapping rate is not driven by excess of free barcode compared to sequenced cDNA"}
 
@@ -1247,10 +1279,10 @@ model_outlier = lm(data = plot_df[-which.max(plot_df$bc_mol/plot_df$seq_mol),], 
 
 ```
 
-Linear models applied here also do not show a slope significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`, p=`r format(coef(summary(model_outlier))[2,4], digits = 3)` with the high-ratio outlier removed from extreme right of plot).
+Again, the slope in the fitted linear model is not significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`, p=`r format(coef(summary(model_outlier))[2,4], digits = 3)` with the high-ratio outlier removed from extreme right of plot).
 
-The molarity calculations may also contain barcode concatamers, which will not align to the mouse genome and will therefore not be considered in our estimations of swapping rates. In Figure \@ref(fig:plot-proxy), we repeat the same ratio approach as in Figure \@ref(fig:plot-ratio), but use the total number of mapped reads per plate as a proxy for the amount of sequenced cDNA.
-
+The molarity calculations may also contain barcode concatamers, which do not align to the mouse genome and are irrelevant to our swapping fraction estimation.
+In Figure \@ref(fig:plot-proxy), we repeat the approach used in Figure \@ref(fig:plot-ratio), but use the total number of mapped reads per plate as a proxy for the amount of sequenced cDNA.
 
 ```{r plot-proxy, fig.cap = "Swapping rate is not driven by excess of free barcode compared to sequenced cDNA. Here, the total number of alignable reads per plate has been considered to exclude barcode concatamers, which may be seen on the bioanalyzer trace."}
 
@@ -1269,43 +1301,51 @@ model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_proxy))
 
 However, we still do not see a slope signifiacntly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`)
 
-In summary, we do not observe our calculated swapping rates to be affected by the amount of free barcode in libraries, nor the ratio of free barcode to cDNA quantity. This contrasts with @sinha_index_2017, who showed that titrations of increasing amounts of additional free primer (1nM, 10nM, 100nM) increased the rate of barcode swapping. 
+In summary, our calculated swapping rates are not associated with the amount of free barcode in libraries, nor the ratio of free barcode to cDNA quantity. 
+This contrasts with @sinha_index_2017, who showed that titrations of increasing amounts of additional free primer (1 nM, 10 nM, 100 nM) increased the rate of barcode swapping. 
+However, their most notable result was that with 100nM of free barcode, which is far in excess of standard experimental quantities. 
+Our analysis suggests that the amount of free barcode has little bearing on the rate of swapping when the amount of free barcode is at standard experimental levels - for example, in this data we observed concentrations of 2-6 nM.
 
-However, their most impressive result was that with 100nM of free barcode, which is far in excess of standard experimental quantities. Our analysis therefore suggests that the amount of free barcode has little bearing on the rate of swapping, when the amount of free barcode is at standard experimental levels - for example, in this data we observed concentrations of around 2-6nM.
+## Testing for transcriptome-wide swapping
 
-##Testing for transcriptome-wide swapping
+In the crosshair plots shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000), we showed a swapping pattern for a single gene for a single plate. 
+We now apply a model to each gene across all plates to determine whether swapping is happening consistently across genes.
+This differs from the previous model, which used information from many genes simultaneously to obtain a global estimate of the swapping rate for each plate.
 
-In the crosshair plots shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000), we showed a swapping pattern for a single gene for a single plate. We apply a model to each gene across all plates to identify whether swapping is happening transcriptome-wide. This differs from the previous model, which considered many genes together.
+Let $i$ denote the row index for a cell on a single 96 well plate ($1 \leq i \leq 8$) and let $j$ denote a cell's column index ($1 \leq j \leq 12$). 
+Subsequently, let $Y_{i,j,g}^{(t)}$ denote the read count of gene $g$ in cell $(i,j)$ when profiled using sequencing technology $t$, where $t=2500$ refers to the HiSeq 2500 and $t=4000$ refers to the HiSeq 4000. 
+Additionally, let 
+$$S_{i,j,g}^{(t)} = \sum_{k=1}^{12} Y_{i,k,g}^{(t)}  + \sum_{l=1}^{8} Y_{l,j,g}^{(t)} - 2 Y_{i,j,g}^{(t)}$$ 
+represent the total read count of gene $g$ in technology $t$ across all other cells on this plate sharing an index with $(i, j)$.
 
-Let $i$ denote the row index for a cell on the 96 well plate ($1 \leq i \leq 8$) and let $j$ denote a cell's column index ($1 \leq j \leq 12$). Subsequently, let $C_{i,j,g}^{(t)}$ denote the read count of gene $g$ in cell $(i,j)$ when profiled using sequencing technology $t$, where $t=2500$ refers to the HiSeq 2500 and $t=4000$ refers to the HiSeq 4000. Additionally, let 
-$$S_{i,j,g}^{(t)} = \sum_{k=1}^{12} C_{i,k,g}^{(t)}  + \sum_{l=1}^{8} C_{l,j,g}^{(t)} - 2 C_{i,j,g}^{(t)}$$ 
-represent the total read count of gene $g$ in technology $t$ across all cells with index $i$ or $j$, excluding the cell with barcode combination $(i,j)$. 
+We first consider a null model without swapping where, for cell $(i,j)$, the number of reads mapped to each gene $g$ in the HiSeq 4000 data set is only dependent on the number of reads mapped to the same cell in the HiSeq 2500 data. 
+This means that
 
-We first consider a null model without swapping where, for cell $(i,j)$, the number of reads mapped to each gene $g$ in the HiSeq 4000 data set is only dependent on the number of reads mapped to the same cell in the HiSeq 2500 data. More specifically: 
-
-$$H_{0}: C_{i,j,g}^{4000} = \alpha_{g} C_{i,j,g}^{2500} + \epsilon_{i,j,g}$$
+$$H_{0}: Y_{i,j,g}^{4000} = \alpha_{g} Y_{i,j,g}^{2500} + \epsilon_{i,j,g}$$
 
 $\alpha_g$ captures both read depth differences as well as any gene specific biases (e.g. GC content) that may change between the two sequencing machines.
 
-As an alternative, we also consider an alternative model with a swapping term, where each cell in the HiSeq 4000 data receives and loses reads from swapping with cells that share exactly one barcode with it. Specifically, let: 
+We also consider an alternative model with a swapping term, where each cell in the HiSeq 4000 data receives swapped reads from (or transfers swapped reads to) cells that share exactly one barcode: 
 
-$$H_{1}: C_{i,j,g}^{4000} = \alpha_g C_{i,j,g}^{2500} + \beta_g \left( S_{i,j,g}^{2500} - C_{i,j,g}^{2500} \right) + \epsilon_{i,j,g}$$
+$$H_{1}: Y_{i,j,g}^{4000} = \alpha_g Y_{i,j,g}^{2500} + \beta_g \left( S_{i,j,g}^{2500} - Y_{i,j,g}^{2500} \right) + \epsilon_{i,j,g}$$
 
-$\beta_g$ allows the strength of the swapping term to vary between genes, so that we can identify whether all genes are affected by swapping or not. $S_{i,j,g}^{2500}$ accounts for arrival of transcripts of gene $g$ in a cell $(i,j)$ due to barcode swapping. Similarly, $C_{i,j,g}^{2500}$ accounts for the loss of transcripts of gene $g$ in cell $(i,j)$ due to barcode swapping (as without a barcode swap, a PCR duplicate would instead represent a new read for the gene in the original cell).
+$\beta_g$ allows the strength of the swapping term to vary between genes, so that we can identify whether all genes are consistently affected by swapping.
+$S_{i,j,g}^{2500}$ represents the pool of available reads that can be transferred into the library for cell $(i,j)$ due to swapping of one barcode.
+$Y_{i,j,g}^{2500}$ represents the pool of reads that can be transferred from  $(i,j)$ to other libraries.
+(In this manner, barcode swapping does result in the "loss" of reads from the cell where the molecule originated.
+Without a barcode swap, a PCR duplicate would instead represent a new read for the gene in the original cell.)
 
-The model may also be parameterised as 
-$$H_{1}: C_{i,j,g}^{4000} = \left(\alpha_g - \beta_g\right) C_{i,j,g}^{2500} + \beta_g S_{i,j,g}^{2500} + \epsilon_{i,j,g} = \alpha'_g C_{i,j,g}^{2500} + \beta_g S_{i,j,g}^{2500} + \epsilon_{i,j,g}$$
-but as the models are equivalent we fit the more swapping intuitive formulation presented above (i.e. including gain and loss of trancripts).
+Models $H_1$ and $H_0$ are fitted by least squares to high-abundance genes, i.e., mean counts greater than 50 across all plates.
+This focuses on genes that have sufficient reads for swapping to clearly manifest - in contrast, genes with low or zero counts provide no information about the presence or absence of swapping.
+The use of least squares assumes a normal distribution for the errors, which is reasonable for large Poisson-distributed counts.
 
-Models $H_1$ and $H_0$ are fitted by least squares, approximating the Poisson-distributed counts as normally distributed. 
-We fitted to genes that are abundant (mean >50 counts across all plates) as swapping can only occur where there are sufficient molecules present to swap in the first place.
+For each gene, evidence against $H_{0}$ in favour of $H_{1}$ is established by performing an F-test (as the models are nested).
+The use of the swapping term significantly improves the model fit to the data when $H_{1}$ is favoured over $H_{0}$.
 
-For each gene, evidence against $H_{0}$ in favour of $H_{1}$ can be established by performing an F-test (as the models are nested).
+In addition, we expect that $\beta > 0$.
+If $\beta < 0$, the behaviour of swapping is inverted compared to the other work presented above.
 
-
-When $H_{1}$ is favoured over $H_{0}$, we are explaining the data better with the swapping term. However, the swapping term only operates in the way that we expect when $\beta > 0$. If $\beta < 0$, then the behaviour of swapping is inverted compared to that expected from the other work presented above. 
-
-When the model is applied, the vast majority of genes favour $H_{1}$, with $\beta>0$, as shown in Figure \@ref(fig:subset-highexpr)
+When the model is applied, the vast majority of genes favour $H_{1}$ with $\beta>0$, as shown in Figure \@ref(fig:subset-highexpr)
 
 ```{r subset-highexpr, fig.cap="Gene-wise swapping model fits. Gene-wise model fits are shown, separated by whether the swapping model is preferred over the null model. Y-axis values correspond to the number of genes in each category."}
 
@@ -1511,11 +1551,12 @@ anova_frac_twolane = prop.table(table(p.adjust(anova_ps_twolane, method = "fdr")
 
 ```
 
-`r format(anova_frac*100, digits = 3)`% of considered genes show a significant model fit improvement with the swapping term (FDR-corrected $q<0.05$). Of these genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the barcode swapping model.
+`r format(anova_frac*100, digits = 3)`% of considered genes show a significant model fit improvement with the swapping term (FDR-corrected $q<0.05$). 
+Of these genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the expected barcode swapping model.
+This strongly suggests that barcode swapping is more prevalent on the HiSeq 4000 compared to the HiSeq 2500, and that it affects nearly all tested genes.
 
-This strongly suggests that barcode swapping is more prevalent on the HiSeq 4000 compared to the HiSeq 2500, and that it affects nearly all genes. 
-
-As a control for our model, we also applied it to data where identical library pools were sequenced on two lanes of a HiSeq 2500. Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as expected.
+As a negative control, we also applied it to data where identical library pools were sequenced on two lanes of a HiSeq 2500. 
+Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as expected.
 
 #Droplet-based analyses
 
