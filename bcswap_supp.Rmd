@@ -87,7 +87,7 @@ All code used is accessible by clicking on the `Code` buttons.
 
 Before continuing, we define a few terms:
 
-* Swapping occurs between a **"donor"** library, from which the transcript originated, and **"recipient"** libraries, in which the swapped read is detected after sequencing.
+* Swapping occurs between a **donor** library, from which the transcript originated, and **recipient** libraries, in which the swapped read is detected after sequencing.
 
 * The **swapping fraction** is defined as the fraction of reads that have been mislabelled, from the set of all cDNA-derived reads in a pool of multiplexed libraries sequenced on a single flow cell lane.
 
@@ -96,15 +96,11 @@ Before continuing, we define a few terms:
 ## Description of the experimental design
 
 ```{r load-richard}
-
-libs = read.table(paste0(folder_location, "/data/richard_4000.tab"), header = T, stringsAsFactors = F)
-libs_2500 = read.table(paste0(folder_location, "/data/richard_2500.tab"), header = TRUE, stringsAsFactors = FALSE)
+libs <- read.table(paste0(folder_location, "/data/richard_4000.tab"), header = TRUE, stringsAsFactors = FALSE)
+libs_2500 <- read.table(paste0(folder_location, "/data/richard_2500.tab"), header = TRUE, stringsAsFactors = FALSE)
 # There's an empty well on one of the plates too, but it contains ERCCs. It is therefore an expected combination
-libs$expected[libs$empty_well] = TRUE
-libs_2500$expected[libs_2500$empty_well] = TRUE
-
-
-
+libs$expected[libs$empty_well] <- TRUE
+libs_2500$expected[libs_2500$empty_well] <- TRUE
 ```
 
 We consider two 96-well plates of single-cell RNA-seq libraries for mouse T-cells. 
@@ -112,15 +108,12 @@ We used dual indices for cell labelling, i.e., a different barcode was used at e
 The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). 
 For sequencing, all cell libraries from the two plates were multiplexed. 
 
-```{r richard-schematic, fig.cap="Richard data experimental design. Cells were seeded in each of the orange positions in the plot. Neither set of barcodes used for a given 96-well plate were used in the other. One barcode combintion (N729,S522) was left without a cell, but did contain barcodes and spike-in transcripts. Each orange block is a single 96-well plate. Grey positions are locations where we do not expect to see sequencing reads."}
-
+```{r richard-schematic, fig.cap="Overview of the experimental design in the Richard dataset. Each position of the plot represents a barcode combination. Cells were seeded in each of the orange positions in the plot, where each orange block represents a single 96-well plate. One barcode combintion (N729,S522) did not contain a cell, but did contain barcodes and spike-in transcripts. Barcode combinations in the grey positions were not used, and thus should not contain sequencing reads."}
 ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = expected), col = "grey50") +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(x = "Barcode 1", y="Barcode 2") +
   scale_fill_manual(values = c("FALSE" = "grey30", "TRUE" = "coral"), name = "", labels = c("No cell", "Cell present"))
-
-
 ```
 
 ## Details of data generation
@@ -146,35 +139,29 @@ We will refer to these barcode combinations as "impossible" combinations, in com
 Note that we only consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from, e.g., human or bacterial sources (especially in the empty well).
 
 Figure \@ref(fig:present-richard) shows the observed numbers of mapped reads for each barcode combination. 
-Where cells have been loaded, there are many mapped reads (yellow/green areas). 
-In the impossible barcode combinations we observe a lower but non-zero number of mapped reads.
+Where cells have been loaded, there are many mapped reads.
+In the impossible barcode combinations, we observe a lower but non-zero number of mapped reads, consistent with the presence of barcode swapping.
 
-```{r present-richard, fig.cap="Number of mapped read per barcode combination. The number of mapped reads is shown for each barcode combination, as a log10 count."}
-
+```{r present-richard, fig.cap="Number of mapped reads per barcode combination, coloured on a log~10~ scale."}
 ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = log10(mapped))) +
   theme(axis.text.x = element_text(angle = 90)) +
   scale_fill_viridis(name = "log10\nmapped\ncounts") +
   labs(x="Barcode 1", y="Barcode 2")
 
-
-medfrac = median(libs$reads[!libs$expected])/median(libs$reads[libs$expected])
-mappedfrac = median(libs$mapped[!libs$expected])/median(libs$mapped[libs$expected])
-totfrac = sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
-
-
+medfrac <- median(libs$reads[!libs$expected])/median(libs$reads[libs$expected])
+mappedfrac <- median(libs$mapped[!libs$expected])/median(libs$mapped[libs$expected])
+totfrac <- sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
 ```
 
-The distribution of these library sizes are shown in Figure \@ref(fig:richard-boxplot) below. 
+The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot) below. 
 The impossible combinations have a median library size that is `r format(mappedfrac*100, digits = 2)`% of the median size of the expected combinations. 
 The corresponding value for all reads (mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%.
 The total number of mapped reads assigned to impossible combinations is `r format(totfrac*100, digits = 2)`% of that assigned to expected combinations. 
 Note that we consider the empty well to be an "impossible" barcode combination though it does contain a low level of mapped ERCC spike-in reads.
 
-```{r richard-boxplot, fig.cap="Mapped library sizes of seeded and unseeded wells. The library sizes of the unexpected barcode combinations (i.e., wells without cells) are lower than those of the expected combinations (wells with cells), but considerably larger than 0.", message = FALSE, warning = FALSE}
-
-pdf = melt(libs)
-
+```{r richard-boxplot, fig.cap="Boxplots of the total number of reads (mapped or all) for the impossible and expected barcode combinations. Dots represent barcode combinations that have totals more than 1.5 interquartile ranges from the edge of the box.", message = FALSE, warning = FALSE}
+pdf <- melt(libs)
 ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
   geom_boxplot() +
   scale_y_log10(breaks = 10^(seq(3,7)), labels = c("1,000", "10,000", "100,000", "1,000,000", "10,000,000")) +
@@ -182,10 +169,6 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
   theme_bw() +
   scale_x_discrete(labels = c("\"Impossible\" barcode\ncombination", "Expected barcode\ncombination"), name = "") +
   scale_fill_manual(name = "Read type", values = c("royalblue2","springgreen3"), labels = c("All reads", "Mappable"))
-
-
-
-
 ```
 
 ## Swapping rate estimation
@@ -236,7 +219,7 @@ This means that, for each impossible combination $(i^*, j^*)$, we have
 
 $$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
 
-This represents a linear relationship between the number of mapped reads (i.e., library size) for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
+This represents a linear relationship between the library size for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
 We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
 
 <!--
