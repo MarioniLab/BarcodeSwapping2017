@@ -41,7 +41,7 @@ library(reshape2)
 library(scales)
 library(ggsignif)
 library(viridis)
-library(quadprog)
+library(limSolve)
 library(BiocStyle)
 library(DropletUtils)
 library(here)
@@ -100,7 +100,7 @@ Before continuing, we define a few terms:
 
 libs = read.table(paste0(folder_location, "/data/richard_4000.tab"), header = T, stringsAsFactors = F)
 libs_2500 = read.table(paste0(folder_location, "/data/richard_2500.tab"), header = TRUE, stringsAsFactors = FALSE)
-# There's an empty well on one of the plates too
+# There's an empty well on one of the plates too, but it contains ERCCs. It is therefore an expected combination
 libs$expected[libs$empty_well] = TRUE
 libs_2500$expected[libs_2500$empty_well] = TRUE
 
@@ -108,12 +108,12 @@ libs_2500$expected[libs_2500$empty_well] = TRUE
 
 ```
 
-We consider two 96-well plates of single-cell RNA-seq libraries for mouse blood cells. 
+We consider two 96-well plates of single-cell RNA-seq libraries for mouse T-cells. 
 We used dual indices for cell labelling i.e. a different barcode was used at each end of the molecule. 
 The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). 
 For sequencing, all cell libraries from the two plates were multiplexed. 
 
-```{r richard-schematic, fig.cap="Richard data experimental design. Cells were seeded in each of the orange positions in the plot. Neither set of barcodes used for a given 96-well plate were used in the other. One barcode combintion (N729,S522) was left without a cell. Each orange block is a single 96-well plate. Grey positions are locations where we do not expect to see sequencing reads."}
+```{r richard-schematic, fig.cap="Richard data experimental design. Cells were seeded in each of the orange positions in the plot. Neither set of barcodes used for a given 96-well plate were used in the other. One barcode combintion (N729,S522) was left without a cell, but did contain barcodes and spike-in transcripts. Each orange block is a single 96-well plate. Grey positions are locations where we do not expect to see sequencing reads."}
 
 ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = expected), col = "grey50") +
@@ -135,7 +135,7 @@ Each plate of libraries was pooled, cleaned with Ampure XP beads, and quantitate
 Equimolar quantities of libraries from each plate were combined for sequencing.
 
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
-Read mapping was performed using the _Subread_ aligner (v1.5.1) to the Ensembl mm10 genome with ERCC92 annotation.
+Read mapping was performed using the _Subread_ aligner (v1.5.1) @liao_subread_2013 to the Ensembl mm10 genome with ERCC92 annotation.
 We used a Phred offset of 33 and only considered uniquely mapped reads, with default values for all other parameters.
 We counted the number of reads mapped to each gene in each cell using the `featureCounts` function in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`).
 This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file, or to spike-in transcripts in the Thermo-Fisher ERCC92 GTF (see https://github.com/MarioniLab/CommonResources for details).
@@ -218,18 +218,24 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
   labs(x = "Barcode 1", y = "Barcode 2")
 ```
 
+Let $\tau$ be the conversion rate of seeded cDNA molecules to mapped reads in the same cell library.
+This is probably less than 1 due to the presence of unmappable sequences (e.g., transcribed repeats).
+Moreover, a seeded PCR duplicate of a cDNA molecule (formed on the flow cell) would normally count as a new read for the gene in the original cell.
+However, if the duplicate molecule has swapped its barcode, the cell has effectively "lost" this additional read.
+This will further decrease the value of $\tau$.
+
+
 We further assume that number of observed swapped reads is proportional to the number of molecules that are available for swapping. 
 Define $\rho$ as the rate of swapping from any single donor library to any single recipient library, i.e., the proportion of molecules in the donor library that appear as mislabelled reads in the recipient.
-Let $\tau$ be the conversion rate of seeded cDNA molecules to mapped reads. 
 For each barcode combination, the number of reads can be modelled as 
 
 $$\bar{X}_{i,j} = \tau M_{i, j} + \rho \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \;. $$
 
-As barcode swapping is rare, $r$ should be very low such that $\bar{X}_{i,j} \approx cM_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
+As barcode swapping is rare, $\rho$ should be very low such that $\bar{X}_{i,j} \approx \tau M_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
 We further approximate $\bar{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
 This means that, for each impossible combination $(i^*, j^*)$, we have 
 
-$$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\alpha} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
+$$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
 
 This represents a linear relationship between the number of mapped reads (i.e., library size) for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
 We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
@@ -289,13 +295,15 @@ We estimate the total number of mislabelled reads across all combinations to be
 $$
 \begin{aligned}
 & \rho \sum_{i=1}^{16} \sum_{j=1}^{24} \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \\
-& \approx \frac{\rho}{\tau}\sum_{(i,j) \in \mathcal{E}} \left( \sum_{k \neq j} X_{i,k} + \sum_{l \neq i} X_{l,j}\right) \\
-& = \frac{38 \rho}{\tau} \sum_{(i,j) \in \mathcal{E}} X_{i,j}
+& = 38 \rho \sum_{i=1}^{16} \sum_{j=1}^{24} M_{i,j} \\ 
+& = 38 \rho \sum_{(i,j) \in \mathcal{E}} M_{i,j} \\ 
+& \approx \frac{38 \rho}{\tau} \sum_{(i,j) \in \mathcal{E}} X_{i,j}
 \end{aligned}
 $$
 
 where $\mathcal{E}$ is a set of all expected combinations.
 The multiplication by 38 is due to the fact that there are 38 available destinations for a single-barcode-swapped read from any single expected combination (Figure \@ref(fig:swap-schematic-receive)). 
+In other words, we sum each $M_{i,j}$ 38 times in the first line of the above expression.
 This includes the impossible barcode combinations as well as the real cell combinations.
 
 <!-- The slope ($\beta$) is `r format(coef(summary(mod_mapped))[2,1], digits = 3, nsmall = 3)`, which corresponds to the rate at which barcode swapped molecules appear in the single unexpected barcode combination libraries from the 20 donor libraries (see Figure \@ref(fig:swap-schematic-source)). However, because the 20 donor libraries are also contributing swaps to each of the 20 recipient libraries on their row and column, the slope $\beta$ actually corresponds to the rate of incoming swapped transcripts per recipient per donor. -->
@@ -321,22 +329,25 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
   labs(x = "Barcode 1", y = "Barcode 2")
 
 
+factor = sum(libs$mapped[libs$expected])/sum(libs$mapped)
+rate_estimate = coef(mod_mapped)[2] * 38 * factor
+rate_error = coef(summary(mod_mapped))[2,2] * 38 * factor
 
 ```
 
 To obtain the swapping fraction in this experiment, we divide by the total number of mapped reads:
 
 $$
-\frac{38 \rho}{\gamma} \left( \frac{\sum_{(i,j) \in \mathcal{E}} X_{i,j}}{\sum_{i=1}^{16} \sum_{j=1}^{24} X_{i,j}} \right)
+\frac{38 \rho}{\tau} \left( \frac{\sum_{(i,j) \in \mathcal{E}} X_{i,j}}{\sum_{i=1}^{16} \sum_{j=1}^{24} X_{i,j}} \right)
 $$
 
-This yields an estimated swapping rate of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%. 
+This yields an estimated swapping rate of `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`%. 
 Notably, this is higher than the median-to-median fraction of `r format(mappedfrac*100, digits = 2)`%. 
 This is because the median-to-median fraction only considered swapped reads arriving in the unexpected barcode combinations, whereas this slope-estimated value considers reads swapping across the entire set of barcode combinations.
 
-Note that we actually fitted the line with an intercept.
+Note that we fitted the line with an intercept.
 The intercept value for the model is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)`$\pm$`r format(coef(summary(mod_mapped))[1,2], digits = 4)`.
-This is close to zero compared to a median library size of `r libs$mapped[!libs$expected]` for the expected combinations, consistent with our model for $\bar{X}_{i_0,j_0}$.
+This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\bar{X}_{i_0,j_0}$.
 
 ## Negative control data with the HiSeq 2500
 
@@ -390,12 +401,10 @@ cell_outs = lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x
 df = do.call(rbind, cell_outs)
 df$tot = df$col + df$row
 
-# df_outlier = df[-which.max(df$mapped),]
-# mod_mapped_outlier = lm(df_outlier$mapped ~ df_outlier$tot)
 mod_mapped_2500 = lm(df$mapped ~ df$tot)
 
 ggplot(df, aes(x = tot, y = mapped)) +
-    geom_abline(slope = coef(mod_mapped_outlier)[2], intercept = coef(mod_mapped_outlier)[1], lwd = 1.5 ) +
+    geom_abline(slope = coef(mod_mapped_2500)[2], intercept = coef(mod_mapped_2500)[1], lwd = 1.5 ) +
   geom_point(col = "grey50") +
   # geom_smooth(method = "lm", se = FALSE, col = "black", formula = y ~ x) +
   # scale_x_log10() + scale_y_log10() +
@@ -408,12 +417,14 @@ ggplot(df, aes(x = tot, y = mapped)) +
        axis.title.x = element_text(size = 13, face = "bold"))
 
 
-
+factor = sum(libs_2500$mapped[libs$expected])/sum(libs_2500$mapped)
+rate_estimate_2500 = coef(mod_mapped_2500)[2] * 38 * factor
+rate_error_2500 = coef(summary(mod_mapped_2500))[2,2] * 38 * factor
 
 ```
 
 Interestingly, we still observe the swapping pattern in the HiSeq 2500 data. 
-However, the estimated swapping rate is approximately an order of magnitude lower: `r format(coef(summary(mod_mapped_2500))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped_2500))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500, compared to `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)`$\pm$`r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
+However, the estimated swapping rate is approximately an order of magnitude lower: `r format(rate_estimate_2500 * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error_2500 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500, compared to `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
 
 # Plate-based analysis: Nestorowa data
 
@@ -614,13 +625,14 @@ R_1[c_1, c_2] &= \begin{cases}
 0 & \text{otherwise}
 \end{cases} \\
 R_2[c_1, c_2] &= \begin{cases}
-\alpha & \text{if cells $c_1$ and $c_2$ share no barcodes}\\
+\alpha & \text{if cells $c_1$ and $c_2$ share both barcodes}\\
 0 & \text{otherwise}
 \end{cases}
 \end{aligned}
 $$
 
-The value of $\alpha$ represents differences in sequencing depth between the two machines.
+The value of $\alpha$ represents the contribution of each cell in the HiSeq 2500 data to the corresponding cell in the HiSeq 4000 data.
+(This includes the "loss" of potential reads, i.e., unswapped PCR duplicates due to barcode swapping, as previously discussed for $\tau$ in the Richard analysis.)
 The value of $\beta$ depends on the row-column swapping fraction, while $\gamma$ captures swapping between barcode combinations that do not share any barcodes.
 
 We then define the relationship between the two count matrices as:
@@ -734,212 +746,6 @@ Gene subsetting and fitting of the model was performed separately for each plate
 
 ```{r estimate-rate}
 
-#This chunk is particularly slow - perhaps run on only a subset of plates if you want speed
-
-#we needed to add a line to the source code of this function to avoid
-#an overflow issue in fortran
-#The line just divides all the values of a matrix by a constant value
-#otherwise the function is unchanged from the package lsei
-my_lsei = function (A = NULL, B = NULL, E = NULL, F = NULL, G = NULL, 
-  H = NULL, Wx = NULL, Wa = NULL, type = 1, tol = sqrt(.Machine$double.eps), 
-  tolrank = NULL, fulloutput = FALSE, verbose = TRUE) 
-{
-  require(quadprog)
-  
-  if (is.vector(E) & length(F) == 1) 
-    E <- t(E)
-  else if (!is.matrix(E) & !is.null(E)) 
-    E <- as.matrix(E)
-  if (is.vector(A) & length(B) == 1) 
-    A <- t(A)
-  else if (!is.matrix(A) & !is.null(A)) 
-    A <- as.matrix(A)
-  if (is.vector(G) & length(H) == 1) 
-    G <- t(G)
-  else if (!is.matrix(G) & !is.null(G)) 
-    G <- as.matrix(G)
-  if (!is.matrix(F) & !is.null(F)) 
-    F <- as.matrix(F)
-  if (!is.matrix(B) & !is.null(B)) 
-    B <- as.matrix(B)
-  if (!is.matrix(H) & !is.null(H)) 
-    H <- as.matrix(H)
-  if (is.null(A) && is.null(E)) {
-    if (is.null(G)) 
-      stop("cannot solve least squares problem - A, E AND G are NULL")
-    A <- matrix(data = 0, nrow = 1, ncol = ncol(G))
-    B <- 0
-  }
-  else if (is.null(A)) {
-    A <- matrix(data = E[1, ], nrow = 1)
-    B <- F[1]
-  }
-  Neq <- nrow(E)
-  Napp <- nrow(A)
-  Nx <- ncol(A)
-  Nin <- nrow(G)
-  if (is.null(Nx)) 
-    Nx <- ncol(E)
-  if (is.null(Nx)) 
-    Nx <- ncol(G)
-  if (is.null(Nin)) 
-    Nin <- 1
-  if (is.null(Neq)) {
-    Neq <- 0
-    if (verbose & type == 1) 
-      warning("No equalities - setting type = 2")
-    type = 2
-    F <- NULL
-  }
-  else {
-    if (ncol(E) != Nx) 
-      stop("cannot solve least squares problem - A and E not compatible")
-    if (length(F) != Neq) 
-      stop("cannot solve least squares problem - E and F not compatible")
-  }
-  if (is.null(G)) 
-    G <- matrix(data = 0, nrow = 1, ncol = Nx)
-  if (is.null(H)) 
-    H <- 0
-  if (ncol(G) != Nx) 
-    stop("cannot solve least squares problem - A and G not compatible")
-  if (length(B) != Napp) 
-    stop("cannot solve least squares problem - A and B not compatible")
-  if (length(H) != Nin) 
-    stop("cannot solve least squares problem - G and H not compatible")
-  if (!is.null(Wa)) {
-    if (length(Wa) != Napp) 
-      stop("cannot solve least squares problem - Wa should have length = number of rows of A")
-    A <- A * Wa
-    B <- B * Wa
-  }
-  Tol <- tol
-  if (is.null(Tol)) 
-    Tol <- sqrt(.Machine$double.eps)
-  IsError <- FALSE
-  if (type == 1) {
-    ineq <- Nin + Nx
-    mIP <- ineq + 2 * Nx + 2
-    lpr <- 1
-    if (fulloutput) 
-      lpr <- lpr + 3
-    if (!is.null(tolrank)) 
-      lpr <- lpr + 6
-    if (!is.null(Wx)) {
-      lw <- length(Wx)
-      lpr <- lpr + 2 + lw
-    }
-    ProgOpt <- rep(1, lpr)
-    if (lpr > 1) {
-      ipr <- 1
-      if (fulloutput) {
-        ProgOpt[ipr:(ipr + 2)] <- c(ipr + 3, 1, 1)
-        ipr <- ipr + 3
-      }
-      if (!is.null(tolrank)) {
-        if (length(tolrank) == 1) 
-          tolrank <- rep(tolrank, len = 2)
-        ProgOpt[ipr:(ipr + 5)] <- c(ipr + 6, 4, tolrank[1], 
-          ipr + 6, 5, tolrank[2])
-        ipr <- ipr + 6
-      }
-      if (!is.null(Wx)) {
-        lw <- length(Wx)
-        if (lw == 1) {
-          ProgOpt[ipr:(ipr + 2)] <- c(ipr + 3, 2, 1)
-        }
-        else {
-          if (lw != Nx) 
-            stop("cannot solve least squares problem - number of weighs should be =1 or =number of unknowns")
-          lw <- lw + ipr + 1
-          ProgOpt[ipr:lw] <- c(lw + 1, 3, Wx)
-        }
-      }
-    }
-    mdW <- Neq + Napp + ineq
-    if (fulloutput) 
-      mdW <- max(mdW, Nx)
-    mWS <- 2 * (Neq + Nx) + max(Napp + ineq, Nx) + (ineq + 
-      2) * (Nx + 7)
-    storage.mode(A) <- storage.mode(B) <- "double"
-    storage.mode(E) <- storage.mode(F) <- "double"
-    storage.mode(G) <- storage.mode(H) <- "double"
-    sol <- .Fortran("lsei", NUnknowns = Nx, NEquations = Neq, 
-      NConstraints = Nin, NApproximate = Napp, A = A, 
-      B = B, E = E, F = F, G = G, H = H, X = as.vector(rep(0, 
-        Nx)), mIP = as.integer(mIP), mdW = as.integer(mdW), 
-      mWS = as.integer(mWS), IP = as.integer(rep(0, mIP)), 
-      W = as.double(matrix(data = 0, nrow = mdW, ncol = Nx + 
-        1)), WS = as.double(rep(0, mWS)), lpr = as.integer(lpr), 
-      ProgOpt = as.double(ProgOpt), verbose = as.logical(verbose), 
-      IsError = as.logical(IsError))
-    if (any(is.infinite(sol$nX))) 
-      sol$IsError <- TRUE
-    if (fulloutput) {
-      covar <- matrix(data = sol$W, nrow = mdW, ncol = Nx + 
-        1)[1:Nx, 1:Nx]
-      RankEq <- sol$IP[1]
-      RankApp <- sol$IP[2]
-    }
-  }
-  else if (type == 2) {
-    if (!is.null(Wx)) 
-      stop("cannot solve least squares problem - weights not implemented for type 2")
-    if (!is.null(Wa)) 
-      stop("cannot solve least squares problem - weights not implemented for type 2")
-    dvec <- crossprod(A, B)
-    Dmat <- crossprod(A, A)
-    diag(Dmat) <- diag(Dmat) + 1e-08
-    
-    #THIS IS THE ADDED CODE
-    #As per answer 2 at http://stackoverflow.com/questions/28381855/r-function-solve-qp-error-constraints-are-inconsistent-no-solution?rq=1 it appears we have overflow in the fortran code, so we scale as recommended
-    sc = base::norm(Dmat, "2")
-    Dmat = Dmat/sc
-    dvec = dvec/sc
-    
-    Amat <- t(rbind(E, G))
-    bvec <- c(F, H)
-    sol <- solve.QP(Dmat, dvec, Amat, bvec, meq = Neq)
-    sol$IsError <- FALSE
-    sol$X <- sol$solution
-  }
-  else stop("cannot solve least squares problem - type unknown")
-  X <- sol$X
-  X[which(abs(X) < Tol)] <- 0
-  if (any(is.infinite(X))) {
-    residual <- Inf
-    solution <- Inf
-  }
-  else {
-    residual <- 0
-    if (Nin > 0) {
-      ineq <- G %*% X - H
-      residual <- residual - sum(ineq[ineq < 0])
-    }
-    if (Neq > 0) 
-      residual <- residual + sum(abs(E %*% X - F))
-    if (residual > Tol) 
-      sol$IsError <- TRUE
-    solution <- 0
-    if (Napp > 0) 
-      solution <- sum((A %*% X - B)^2)
-  }
-  xnames <- colnames(A)
-  if (is.null(xnames)) 
-    xnames <- colnames(E)
-  if (is.null(xnames)) 
-    xnames <- colnames(G)
-  names(X) <- xnames
-  res <- list(X = X, residualNorm = residual, solutionNorm = solution, 
-    IsError = sol$IsError, type = "lsei")
-  if (fulloutput && type == 1) {
-    res$covar <- covar
-    res$RankEq <- sol$IP[1]
-    res$RankApp <- sol$IP[2]
-  }
-  return(res)
-}
-
 
 #Function written largely by Aaron Lun
 #Key function to estimating the contributions
@@ -951,11 +757,11 @@ my_lsei = function (A = NULL, B = NULL, E = NULL, F = NULL, G = NULL,
 # RETURN:
 # vector of coefficients, "other" is cells that share no barcodes, "rowcol" is cells that share one barcode
 #   "self" is the cell that shares 2 barcodes (i.e. itself.)
-get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = FALSE, n.genes = 500, sample = NULL){
+get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = TRUE, n.genes = 500, sample = NULL){
   nsamples = ncol(plate_4000)
   
 
-  #Gene selection
+  #### GENE SELECTION
   if(nrow(plate_4000)>1){
     #straight SD version
     # top_var = apply(plate_2500, 1, sd)
@@ -969,7 +775,7 @@ get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = FALSE
   
     # impose an expression limit - the gene must be expressed in a cell with at least 500 counts
     # (otherwise some of the methods above pick up genes expressed with, say, 
-    # one or two counts on the whole plate, where swapping cannot actually happen)
+    # one or two counts on the whole plate, where swapping will not actually happen)
     top_var = top_var[apply(plate_2500, 1, max)>500]
     if(n.genes > length(top_var)){
       top_genes = names(top_var)
@@ -1034,28 +840,40 @@ get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = FALSE
   
   #downweight by abundance, to ensure it is not only a few highly expressed genes driving a fit
   if(nrow(mixed)>1){
-  gene_means = rowMeans(pure)
-  sqrts = sqrt(gene_means)
-  repped = unlist(lapply(sqrts, rep, ncol(mixed)))
-  
-  design = sweep(design, 1, repped, "/")
-  responses = Matrix(unlist(responses))/repped
+    gene_means = rowMeans(pure)
+    sqrts = sqrt(gene_means)
+    repped = unlist(lapply(sqrts, rep, ncol(mixed)))
+    
+    design = sweep(design, 1, repped, "/")
+    responses = Matrix(unlist(responses))/repped
   }
+  
+  
+  #we need to shrink variables to prevent overflow in limsolve::lsei
+  val = base::norm(responses, "2")
+  shrunk_design = design/val
+  shrunk_responses = responses/val
   
   
   if(!constrain){
     res = solve(qr(design), matrix(unlist(responses)))
-    out = res[,1]#/sum(res)
+    out = res[,1]
   } else {
     #this implementation of lsei prevents fortran overflows but is otherwise identical
-    res = my_lsei(A = as.matrix(design), B = unlist(responses), G = diag(ncol(design)), H = numeric(ncol(design)), type = 2)
-    out = res$X#/sum(res$X)
+    res = limSolve::lsei(A = as.matrix(shrunk_design), 
+                         B = unlist(shrunk_responses), 
+                         G = diag(ncol(design)), 
+                         H = numeric(ncol(design)), 
+                         type = 2)
+    out = res$X
   }
   
+  #return list of: parameter estimates, R matrix, 2500 counts
   
   names(out) = c("other", "rowcol", "self")
+  
 
-  return(out)
+  return(list(params = out, beta = beta, count_2500 = plate_2500))
 }
 
 #utility function to extract barcodes from cell names
@@ -1068,82 +886,120 @@ get_bcs = function(counts_mat){
 
 bcs = lapply(swap_split, get_bcs)
 
-#get the parameters
-const = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 500))
-#rbind them together for all the plates
-const = do.call(rbind, const)
-#multiply up to total contributions
-const_adjusted = sweep(const, 2, c(96-8-11, 11+7, 1), "*")
-#normalise to one
-const_adjusted = sweep(const_adjusted, 1, rowSums(const_adjusted), "/")
 
+run_500 = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 500))
 
 run_250 = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 250))
-run_250 = do.call(rbind, run_250)
-adjust_250 = sweep(run_250, 2, c(96-8-11, 11+7, 1), "*")
-adjust_250 = sweep(adjust_250, 1, rowSums(adjust_250), "/")
-
 
 run_1000 = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 1000))
-run_1000 = do.call(rbind, run_1000)
-adjust_1000 = sweep(run_1000, 2, c(96-8-11, 11+7, 1), "*")
-adjust_1000 = sweep(adjust_1000, 1, rowSums(adjust_1000), "/")
-
 
 run_sample = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 1000, sample = 500))
-run_sample = do.call(rbind, run_sample)
-adjust_sample = sweep(run_sample, 2, c(96-8-11, 11+7, 1), "*")
-adjust_sample = sweep(adjust_sample, 1, rowSums(adjust_sample), "/")
+
+calc_rate = function(mix_mat_list){
+  
+  params = mix_mat_list$params
+  beta = mix_mat_list$beta
+  
+  r0 = matrix(data = c(params[1], 0, 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r1 = matrix(data = c(0, params[2], 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r2 = matrix(data = c(0, 0, params[3])[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  
+  top = sum(mix_mat_list$count_2500 %*% (r0 + r1))
+  bottom = sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
+  
+  return(top/bottom)
+
+}
+
+rate_500 = sapply(run_500, calc_rate)
+rate_250 = sapply(run_250, calc_rate)
+rate_1000 = sapply(run_1000, calc_rate)
+rate_sample = sapply(run_sample, calc_rate)
+
 
 ```
 
-Across the `r length(swap_split)` plates assayed, we acquired a distribution of fitted values (`r format(min(const[,2]), digits = 3)` to `r format(max(const[,2]), digits = 3)`) for the single shared barcode contribution term $\beta$.
+Across the `r length(swap_split)` plates assayed, we acquired a distribution of fitted values. For example, we observe values between `r format(min(sapply(run_500, function(x) x$params[2])), digits = 3)` and `r format(max(sapply(run_500, function(x) x$params[2])), digits = 3)` for the single shared barcode contribution term $\beta$. 
 
 To quantify the swapping fraction, we estimated the number of reads in the HiSeq 4000 libraries that were contributed from the HiSeq 2500 libraries via swapping.
 We include both single barcode swaps ($M_1$) and double barcode swaps ($M_0$) in this estimate.
+We denote summation of the elements $x_{i,j}$ of the matrix $X$ as
+
+$$
+\sigma \left( X \right) = \sum_i \sum_j x_{i,j}
+$$
+
+The total number of swapped reads is
+
+$$
+\sigma \left( Y_{2500} (M_0 + M_1)\right)
+$$
+
 We divided this by the total number of reads in the fitted model (i.e., $Y_{2500}M$) to obtain an estimate of the swapping fraction for each plate.
 
 $$
-Y_{2500} \frac{(M_0 + M_1)}{M}
+\frac{\sigma(Y_{2500}(M_0 + M_1))}{\sigma(Y_{2500}M)}
 $$
 
-Across plates, the mean contributions from the single barcode sharing cells (i.e. $\beta$) was estimated to be `r format(mean(const_adjusted[,2])*100, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
+This provides an estimate for the mean swapping rate of `r format(mean(rate_500)*100, digits = 4)`±`r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
 
-Similar results were obtained with the top 250 (`r format(mean(adjust_250[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_250[,2])/nrow(adjust_250))*100, digits = 3)`%) or 1000 (`r format(mean(adjust_1000[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_1000[,2])/nrow(adjust_1000))*100, digits = 3)`%) most informative genes per plate. 
-We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates of the swapping fraction (`r format(mean(adjust_sample[,2])*100, digits = 3)` $\pm$ `r format(sqrt(var(adjust_sample[,2])/nrow(adjust_sample))*100, digits = 3)`%).
 
-```{r plot-contrib, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. Different fitted values may derive from truly different swapping rates, or differences in the number of informative genes."}
+Similar results were obtained with the top 250 (`r format(mean(rate_250)*100, digits = 4)`±`r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)`±`r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%%) most informative genes per plate. 
+We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates of the swapping fraction (`r format(mean(rate_sample)*100, digits = 4)`±`r format(sqrt(var(rate_sample)/length(rate_sample))*100, digits = 3)`%).
 
-hist(const_adjusted[,2], breaks = 20, xlim = c(0, 0.06), main = "", xlab = "Fitted fraction of transcriptome from other barcode-sharing cells")
+```{r plot-contrib, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. Different fitted values may derive from truly different swapping rates, or differences in the number of informative genes. 500 genes were used for these calculations."}
+
+hist(rate_500, breaks = 20, xlim = c(0, 0.08), main = "", xlab = "Estimated swapping rate")
 
 
 
 ```
 
-In our framework above, we have ignored any swapping in the HiSeq 2500 data to estimate the swapping fraction in the HiSeq 4000 data.
-Technically, our estimates represent an *increase* in the swapping fraction in the HiSeq 4000 data compared to the HiSeq 2500 data.
-Nonetheless, they are consistent with the rate of swapping calculated in the Richard dataset above. 
-Assuming that HiSeq 2500 swapping occurs at a rate of 1/10th the rate of HiSeq 4000 swapping (based on Richard data, and the crosshair patterns shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000)), we could estimate an absolute HiSeq 4000 swapping fraction in the Nestorowa data by multiplying our swapping fraction estimates by 1.1. 
-This gives an estimate of `r format(mean(const_adjusted[,2])*100*1.1, digits = 4)` $\pm$ `r format(sqrt(var(const_adjusted[,2])/nrow(const_adjusted))*100*1.1, digits = 3)`%, which is consistent with the absolute swapping rate estimated from the Richard data of `r format(coef(summary(mod_mapped))[2,1]* 38 * 100, digits = 3, nsmall = 3)` $\pm$ `r format(coef(summary(mod_mapped))[2,2]* 38 * 100, digits = 3, nsmall = 3)`%.
+```{r rowcol-only}
+calc_rate_rowcol = function(mix_mat_list){
+  
+  params = mix_mat_list$params
+  beta = mix_mat_list$beta
+  
+  r0 = matrix(data = c(params[1], 0, 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r1 = matrix(data = c(0, params[2], 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r2 = matrix(data = c(0, 0, params[3])[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  
+  top = sum(mix_mat_list$count_2500 %*% (r1))
+  bottom = sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
+  
+  return(top/bottom)
 
-The swapping fraction estimates for the cells that share no barcodes are shown in Figure \@ref(fig:plot-contrib-offrow). 
-This is calculated as $Y_{2500}M_0/M$ and is close to zero, consistent with the expected rarity of double barcode swaps.
+}
 
-```{r plot-contrib-offrow, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. "}
+rate_500_rowcol = sapply(run_500, calc_rate_rowcol)
 
-hist(const_adjusted[,1], breaks = 20, xlim = c(0, 0.06), main = "", xlab = "Fitted fraction of transcriptome from non-barcode-sharing cells")
+```
 
+In the Richard dataset, we considered swapping along rows and columns exclusively. We can take a similar approach here, considering the rate
 
+$$
+\frac{\sigma(Y_{2500}(M_1))}{\sigma(Y_{2500}M)}
+$$
+
+This provides an estimated row-column swapping rate mean of `r format(mean(rate_500_rowcol)*100, digits = 4)`±`r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100, digits = 3)`%. The row-column swapping rates are well correlated with the total swapping rates (Figure \@ref(fig:rate-comp))
+
+```{r rate-comp, fig.cap = "Total swapping rates are well correlated with row-column swapping rates. The line has intercept 0, slope 1."}
+
+qplot(rate_500, rate_500_rowcol) +
+  theme_bw() +
+  geom_abline(slope = 1) +
+  labs(x = "Total swapping rate", y = "Row-column swapping rate")
 
 ```
 
 
 ```{r genes-var, fig.cap="Swapping rate estimates for different numbers of considered genes. '500 Sampled' refers to 500 genes selected at random from the top 1000 genes. The variance of the estimated swapping rate for each plate for different numbers of considered genes is much smaller than the differences in swapping rate observed between plates."}
 
-rate_est = c(adjust_250[,2], 
-             adjust_1000[,2], 
-             const_adjusted[,2],
-             adjust_sample[,2])
+rate_est = c(rate_250, 
+             rate_1000, 
+             rate_500,
+             rate_sample)
 
 genes = c(rep(250, 16),
           rep(1000, 16),
@@ -1155,7 +1011,7 @@ ggplot(data.frame(genes = genes, rate = rate_est, plate = rep(1:16, 4)),
   geom_point(size = 3) +
   theme_bw() +
   scale_color_brewer(palette = "Set1", name = "Number\nof genes\nconsidered") +
-  labs(x = "Plate", y = "Row-column swapping rate estimate")
+  labs(x = "Plate", y = "Swapping rate estimate")
 
 ```
 
@@ -1173,12 +1029,12 @@ gene_vars = lapply(gene_vars, function(x) x[x!=Inf])
 
 means = sapply(gene_vars, mean)
 
-ggplot(data.frame(mean = means, rate = const_adjusted[,2]),
+ggplot(data.frame(mean = means, rate = rate_500),
        aes(x = mean, y = rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Mean gene score for top 500 genes (no Inf)",
-       y = "Row-column swapping rate estimate")
+       y = "Swapping rate estimate")
 
 ```
 
@@ -1240,7 +1096,7 @@ names(dfs) = plate_names[1:16]
 
 plot_df = as.data.frame(t(sapply(1:16, function(i) c(bc_mol = dfs[[i]][1, "molarity_pmoll"],
                                                      seq_mol = dfs[[i]][2, "molarity_pmoll"],
-                                                     swap_rate = 1-as.numeric(const_adjusted[i, 3])))))
+                                                     swap_rate = rate_500[i]))))
 
 conc_df = plot_df
 
@@ -1281,9 +1137,6 @@ ggplot(plot_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Barcode molarity / Sequenced cDNA molarity", y = "Calculated swapping rate")
-
-
-
 
 model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_mol))
 
@@ -1344,8 +1197,7 @@ $$H_{1}: Y_{i,j,g}^{4000} = \alpha_g Y_{i,j,g}^{2500} + \beta_g \left( S_{i,j,g}
 $\beta_g$ allows the strength of the swapping term to vary between genes, so that we can identify whether all genes are consistently affected by swapping.
 $S_{i,j,g}^{2500}$ represents the pool of available reads that can be transferred into the library for cell $(i,j)$ due to swapping of one barcode.
 $Y_{i,j,g}^{2500}$ represents the pool of reads that can be transferred from  $(i,j)$ to other libraries.
-(In this manner, barcode swapping does result in the "loss" of reads from the cell where the molecule originated.
-Without a barcode swap, a PCR duplicate would instead represent a new read for the gene in the original cell.)
+This is equivalent to the "loss" of PCR duplicate reads due to barcode swapping.
 
 Models $H_1$ and $H_0$ are fitted by least squares to high-abundance genes, i.e., mean counts greater than 50 across all plates.
 This focuses on genes that have sufficient reads for swapping to clearly manifest - in contrast, genes with low or zero counts provide no information about the presence or absence of swapping.
@@ -2099,11 +1951,11 @@ The results of cell calling are shown in Table \@ref(tab:call-cells) and visuali
 
 call_cells = function(expr.matrix){
 
-  test = emptyDrops(expr.matrix, test.args = list(niters = 30000))
+  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
   
   test = test[!is.na(test$FDR),]
   
-  sig = sum(test$FDR <= 0.01 & test$Total >= 1000)
+  sig = sum(test$FDR <= 0.01)
   
   return(sig)
   
