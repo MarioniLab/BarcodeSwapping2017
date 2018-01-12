@@ -136,10 +136,7 @@ This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file,
 
 In the absence of barcode swapping, it should be impossible to observe mapped reads with barcodes from each of the two different plates, i.e., there should be no mapped reads in the grey areas of Figure \@ref(fig:richard-schematic). 
 We will refer to these barcode combinations as "impossible" combinations, in comparison to the expected combinations in orange. 
-Note that we only consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from, e.g., human or bacterial sources (especially in the empty well).
-
-Figure \@ref(fig:present-richard) shows the observed numbers of mapped reads for each barcode combination. 
-Where cells have been loaded, there are many mapped reads.
+For the expected combinations where cells have been loaded, there are many mapped reads (Figure \@ref(fig:present-richard)) as expected.
 In the impossible barcode combinations, we observe a lower but non-zero number of mapped reads, consistent with the presence of barcode swapping.
 
 ```{r present-richard, fig.cap="Number of mapped reads per barcode combination, coloured on a log~10~ scale."}
@@ -149,16 +146,17 @@ ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
   scale_fill_viridis(name = "log10\nmapped\ncounts") +
   labs(x="Barcode 1", y="Barcode 2")
 
-medfrac <- median(libs$reads[!libs$expected])/median(libs$reads[libs$expected])
-mappedfrac <- median(libs$mapped[!libs$expected])/median(libs$mapped[libs$expected])
-totfrac <- sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
+medfrac.mapped <- median(libs$mapped[!libs$expected])/median(libs$mapped[libs$expected])
+totfrac.mapped <- sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
+
+medfrac.all <- median(libs$reads[!libs$expected])/median(libs$reads[libs$expected])
+totfrac.all <- sum(libs$reads[!libs$expected])/sum(libs$reads[libs$expected])
 ```
 
-The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot) below. 
-The impossible combinations have a median library size that is `r format(mappedfrac*100, digits = 2)`% of the median size of the expected combinations. 
-The corresponding value for all reads (mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%.
-The total number of mapped reads assigned to impossible combinations is `r format(totfrac*100, digits = 2)`% of that assigned to expected combinations. 
-Note that we consider the empty well to be an "impossible" barcode combination though it does contain a low level of mapped ERCC spike-in reads.
+The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot). 
+The impossible combinations have a median library size that is `r format(medfrac.mapped*100, digits = 2)`% of the median size of the expected combinations. 
+The total number of mapped reads assigned to impossible combinations is `r format(totfrac.mapped*100, digits = 2)`% of that assigned to expected combinations. 
+Note that the empty well is considered as an expected barcode combination despite the absence of any cell.
 
 ```{r richard-boxplot, fig.cap="Boxplots of the total number of reads (mapped or all) for the impossible and expected barcode combinations. Dots represent barcode combinations that have totals more than 1.5 interquartile ranges from the edge of the box.", message = FALSE, warning = FALSE}
 pdf <- melt(libs)
@@ -170,6 +168,17 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
   scale_x_discrete(labels = c("\"Impossible\" barcode\ncombination", "Expected barcode\ncombination"), name = "") +
   scale_fill_manual(name = "Read type", values = c("royalblue2","springgreen3"), labels = c("All reads", "Mappable"))
 ```
+
+We focused on mapped reads as these are most relevant to downstream analyses.
+Nonetheless, we observe similar results for all reads, consistent with the ability of barcode swapping to affect all molecules on the flow cell.
+The median total for impossible combinations is `r format(medfrac.all*100, digits = 2)`% of the expected combinations,
+while the total number of all reads assigned to impossible combinations is `r format(totfrac.all*100, digits = 2)`% of that assigned to expected combinations.
+
+We emphasize that our results are highly robust to contamination from ambient RNA or human/bacterial sources.
+Regardless of the amount of contamination, the impossible barcode combinations should not contain any reads.
+Barcode swapping is the only possible mechanism for obtaining a substantial number of non-zero reads for these combinations.
+(We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space).
+This provides a point of difference for our experimental design compared to that of @sinha_index_2017.
 
 ## Swapping rate estimation
 
