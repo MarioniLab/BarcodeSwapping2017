@@ -156,7 +156,7 @@ totfrac.all <- sum(libs$reads[!libs$expected])/sum(libs$reads[libs$expected])
 The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot). 
 The impossible combinations have a median library size that is `r format(medfrac.mapped*100, digits = 2)`% of the median size of the expected combinations. 
 The total number of mapped reads assigned to impossible combinations is `r format(totfrac.mapped*100, digits = 2)`% of that assigned to expected combinations. 
-Note that the empty well is considered as an expected barcode combination despite the absence of any cell.
+Note that the empty well is still considered as an expected barcode combination due to the presence of ERCC spike-in transcripts.
 
 ```{r richard-boxplot, fig.cap="Boxplots of the total number of reads (mapped or all) for the impossible and expected barcode combinations. Dots represent barcode combinations that have totals more than 1.5 interquartile ranges from the edge of the box.", message = FALSE, warning = FALSE}
 pdf <- melt(libs)
@@ -190,10 +190,9 @@ We assume that barcode swapping is rare, so it is unlikely that one molecule wil
 This means that reads will only be transferred between combinations that already share a single barcode.
 For example, the combination `N719` and `S505` (red position) would take swapping contributions from the cells in the blue positions in Figure \@ref(fig:swap-schematic-source).
 
-```{r swap-schematic-source, fig.cap="Considered 'available' transcript for barcode combination (N719,S505). We assume that the swapped transcript for the red labelled barcode combination will derive from the blue labelled combinations on the cell-loaded plate. These combinations need to swap only a single barcode to arrive at the red labelled cell. Cell-loaded combinations are shown in grey, and unloaded combinations in black."}
-
-is_target = libs$bc1 == "N719" & libs$bc2 == "S505"
-avail = (libs$bc1 == "N719" | libs$bc2 == "S505") & libs$expected
+```{r swap-schematic-source, fig.cap="A schematic of the expected barcode combinations that are potential donor libraries (blue) for swapping into a recipient library (red), an impossible combination (S505/N719). Only a single barcode needs to be swapped for transcripts in the blue combinations to appear as reads in the red combintion. Cell-loaded combinations are shown in grey, and unloaded combinations are shown in black."}
+is_target <- libs$bc1 == "N719" & libs$bc2 == "S505"
+avail <- (libs$bc1 == "N719" | libs$bc2 == "S505") & libs$expected
 
 schem_cols = rep("black", nrow(libs))
 schem_cols[libs$expected] = "grey40"
@@ -238,17 +237,16 @@ Additionally the well with index $i=1,j=24$ was empty by design.
 -->
 
 
-```{r correlation, fig.cap="Swapping model fit. The one-barcode-distant available transcript and observed swapped transcript counts are shown, with the model fit described above overlaid."}
-
-#melting the data frame purely to make casting it easier
+```{r correlation, fig.cap="Linear relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode. Each point represents an impossible barcode combination, with data generated on the HiSeq 4000. The line of best fit is shown along with the coefficient of determination. Axes are shown on a log-scale for visibility."}
+# Melting the data frame purely to make casting it easier
 molten = melt( libs[libs$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
-#casted to make easier to rowSums/colSums to get the contributions per barcode
+# Casted to make easier to rowSums/colSums to get the contributions per barcode
 casted = acast( molten , bc1~bc2 )
 nsums = rowSums(casted, na.rm = T)
 ssums = colSums(casted, na.rm = T)
 
 unexp = libs[!libs$expected, ]
-#now make the data frame from unexpected combinations for model fit
+# Now make the data frame from unexpected combinations for model fit
 cell_outs = lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x],
                                              col = ssums[unexp$bc2[x]],
                                              row = nsums[unexp$bc1[x]]))
@@ -272,13 +270,8 @@ ggplot(df, aes(x = tot, y = mapped)) +
        axis.title.x = element_text(size = 13, face = "bold")) +
   annotate("text", x = 5500000, y = 8000, label = paste0("italic(R)^2 == ", format(summary(mod_mapped)$r.squared, digits = 2)), parse = TRUE, size = 9)
 
-
-
-
 #retain for later use
 df_4000 = df
-
-
 ```
 
 We estimate the total number of mislabelled reads across all combinations to be
@@ -301,16 +294,15 @@ This includes the impossible barcode combinations as well as the real cell combi
 
 <!-- However, we are only considering the 20 *unexpected* barcode combinations in each row and column of a true cell. In reality, each of the cells is swapping into 38 total barcode combinations - 15 along the column and 23 along the row, both excluding the cell itself. For example, the red cell shown in Figure \@ref(fig:swap-schematic-receive) below can swap reads into all of the blue barcode combinations. -->
 
-```{r swap-schematic-receive, fig.cap="Pattern of swapping. Our model was fitted to the empty barcode combinations, which received libraries from the real cells. Each of those donor cells (one is shown here in red) swaps not into one particular library, but into all 38 recipient libraries that share a single barcode (here shown in blue). Cell-loaded combinations are shown in grey, and unloaded combinations in black."}
+```{r swap-schematic-receive, fig.cap="Schematic illustrating the contribution of a donor library (red) to each of 38 recipient libraries that share a single barcode (blue). Cell-loaded combinations are shown in grey, and unloaded combinations are shown in black."}
+is_target <- libs$bc1 == "N705" & libs$bc2 == "S505"
+avail <- (libs$bc1 == "N705" | libs$bc2 == "S505") #& libs$expected
 
-is_target = libs$bc1 == "N705" & libs$bc2 == "S505"
-avail = (libs$bc1 == "N705" | libs$bc2 == "S505") #& libs$expected
-
-schem_cols = rep("black", nrow(libs))
-schem_cols[libs$expected] = "grey40"
-schem_cols[avail] = "cornflowerblue"
-schem_cols[is_target] = "indianred"
-col_index = unique(schem_cols); names(col_index) = col_index
+schem_cols <- rep("black", nrow(libs))
+schem_cols[libs$expected] <- "grey40"
+schem_cols[avail] <- "cornflowerblue"
+schem_cols[is_target] <- "indianred"
+names(col_index) <- col_index <- unique(schem_cols)
 
 ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = as.character(cols))) +
@@ -319,11 +311,9 @@ ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc
   theme(axis.text.x = element_text(angle = 90)) +
   labs(x = "Barcode 1", y = "Barcode 2")
 
-
-factor = sum(libs$mapped[libs$expected])/sum(libs$mapped)
-rate_estimate = coef(mod_mapped)[2] * 38 * factor
-rate_error = coef(summary(mod_mapped))[2,2] * 38 * factor
-
+factor <- sum(libs$mapped[libs$expected])/sum(libs$mapped)
+rate_estimate <- coef(mod_mapped)[2] * 38 * factor
+rate_error <- coef(summary(mod_mapped))[2,2] * 38 * factor
 ```
 
 To obtain the swapping fraction in this experiment, we divide by the total number of mapped reads:
@@ -332,24 +322,23 @@ $$
 \frac{38 \rho}{\tau} \left( \frac{\sum_{(i,j) \in \mathcal{E}} X_{i,j}}{\sum_{i=1}^{16} \sum_{j=1}^{24} X_{i,j}} \right)
 $$
 
-This yields an estimated swapping rate of `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`%. 
-Notably, this is higher than the median-to-median fraction of `r format(mappedfrac*100, digits = 2)`%. 
+This yields an estimated swapping fraction of `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`%. 
+Notably, this is higher than the median-to-median fraction of `r format(medfrac.mapped*100, digits = 2)`%. 
 This is because the median-to-median fraction only considered swapped reads arriving in the unexpected barcode combinations, whereas this slope-estimated value considers reads swapping across the entire set of barcode combinations.
 
-Note that we fitted the line with an intercept.
-The intercept value for the model is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)`$\pm$`r format(coef(summary(mod_mapped))[1,2], digits = 4)`.
-This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\bar{X}_{i_0,j_0}$.
+Note that we fitted the line in Figure \@(fig:correlation)  with an intercept term.
+The value of the intercept is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)`$\pm$`r format(coef(summary(mod_mapped))[1,2], digits = 4)`.
+This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\bar{X}_{i^*,j^*}$.
 
 ## Negative control data with the HiSeq 2500
 
 The exact same pool of multiplexed libraries was also sequenced on a HiSeq 2500. 
-This provides a negative control dataset where barcode swapping should not be present.
+This provides a negative control dataset where barcode swapping should not be present (or, at least, present at a lower rate than encountered in the HiSeq 4000).
 We see strong correlation between library sizes from the two machines, as shown in Figure \@ref(fig:compare-libs). 
 
-```{r compare-libs, fig.cap = "Library sizes between sequencing machines. We observe excellent correlation between library sizes of the two sequencing machines, particularly for the real cell libraries."}
-
-libs = libs[order(libs$bc1, libs$bc2),]
-libs_2500 = libs_2500[order(libs_2500$bc1, libs_2500$bc2),]
+```{r compare-libs, fig.cap = "Library sizes for all expected (red) and impossible (blue) barcode combinations in the HiSeq 2500 and 4000 data."}
+libs <- libs[order(libs$bc1, libs$bc2),]
+libs_2500 <- libs_2500[order(libs_2500$bc1, libs_2500$bc2),]
 
 if(!all( (libs$bc1 == libs_2500$bc1) & (libs$bc2 == libs_2500$bc2) )){
   print("barcodes don't match")
@@ -363,36 +352,31 @@ ggplot(data = data.frame(hiseq_4000 = libs$mapped, hiseq_2500 = libs_2500$mapped
   scale_color_brewer(palette = "Set1", name = "") +
   theme_bw()
 
-
-mappedfrac_2500 = median(libs_2500$mapped[!libs_2500$expected])/median(libs_2500$mapped[libs_2500$expected])
-totfrac_2500 = sum(libs_2500$mapped[!libs_2500$expected])/sum(libs_2500$mapped[libs_2500$expected])
-
+medfrac.2500 <- median(libs_2500$mapped[!libs_2500$expected])/median(libs_2500$mapped[libs_2500$expected])
+totfrac.2500 <- sum(libs_2500$mapped[!libs_2500$expected])/sum(libs_2500$mapped[libs_2500$expected])
 ```
 
 In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode combinations. 
-The unexpected combinations have a median library size of `r format(mappedfrac_2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(mappedfrac*100, digits = 2)`% from HiSeq 4000). 
-Considering all mapped reads on the plate, there are `r format(totfrac_2500*100, digits = 2)`% in the unexpected combinations as in the expected ones (compared to `r format(totfrac*100, digits = 2)`% from HiSeq 4000).
+The unexpected combinations have a median library size of `r format(medfrac.2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(medfrac.mapped*100, digits = 2)`% from HiSeq 4000). 
+Considering all mapped reads on the plate, there are `r format(totfrac.2500*100, digits = 2)`% in the unexpected combinations as in the expected ones (compared to `r format(totfrac.mapped*100, digits = 2)`% from HiSeq 4000).
 
-We have applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data. 
-The fit and data is displayed graphically in Figure \@ref(fig:model-2500).
+We applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data.
+Results are shown in Figure \@ref(fig:model-2500)).
 
-```{r model-2500, fig.cap="Model fit for HiSeq 2500 data. A similar trend as for the HiSeq 4000 data can be observed."}
+```{r model-2500, fig.cap="Linear relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode, using data from the HiSeq 2500. The line of best fit is shown along with the coefficient of determination."}
+molten <- melt( libs_2500[libs_2500$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
+casted <- acast( molten , bc1~bc2 )
+nsums <- rowSums(casted, na.rm = TRUE)
+ssums <- colSums(casted, na.rm = TRUE)
 
-molten = melt( libs_2500[libs_2500$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
-casted = acast( molten , bc1~bc2 )
-nsums = rowSums(casted, na.rm = T)
-ssums = colSums(casted, na.rm = T)
+unexp <- libs_2500[!libs_2500$expected, ]
+cell_outs <- lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x],
+                                                          col = ssums[unexp$bc2[x]],
+                                                          row = nsums[unexp$bc1[x]]))
 
-unexp = libs_2500[!libs_2500$expected, ]
-
-cell_outs = lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x],
-                                             col = ssums[unexp$bc2[x]],
-                                             row = nsums[unexp$bc1[x]]))
-
-df = do.call(rbind, cell_outs)
-df$tot = df$col + df$row
-
-mod_mapped_2500 = lm(df$mapped ~ df$tot)
+df <- do.call(rbind, cell_outs)
+df$tot <- df$col + df$row
+mod_mapped_2500 <- lm(df$mapped ~ df$tot)
 
 ggplot(df, aes(x = tot, y = mapped)) +
     geom_abline(slope = coef(mod_mapped_2500)[2], intercept = coef(mod_mapped_2500)[1], lwd = 1.5 ) +
@@ -407,15 +391,13 @@ ggplot(df, aes(x = tot, y = mapped)) +
        axis.title.y = element_text(size = 13, face = "bold"), 
        axis.title.x = element_text(size = 13, face = "bold"))
 
-
-factor = sum(libs_2500$mapped[libs$expected])/sum(libs_2500$mapped)
-rate_estimate_2500 = coef(mod_mapped_2500)[2] * 38 * factor
-rate_error_2500 = coef(summary(mod_mapped_2500))[2,2] * 38 * factor
-
+factor <- sum(libs_2500$mapped[libs$expected])/sum(libs_2500$mapped)
+rate_estimate_2500 <- coef(mod_mapped_2500)[2] * 38 * factor
+rate_error_2500 <- coef(summary(mod_mapped_2500))[2,2] * 38 * factor
 ```
 
 Interestingly, we still observe the swapping pattern in the HiSeq 2500 data. 
-However, the estimated swapping rate is approximately an order of magnitude lower: `r format(rate_estimate_2500 * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error_2500 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500, compared to `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
+However, the estimated swapping fraction is approximately an order of magnitude lower: `r format(rate_estimate_2500 * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error_2500 * 100, digits = 3, nsmall = 3)`% on the HiSeq 2500, compared to `r format(rate_estimate * 100, digits = 3, nsmall = 3)`$\pm$`r format(rate_error * 100, digits = 3, nsmall = 3)`% on the HiSeq 4000.
 
 # Plate-based analysis: Nestorowa data
 
