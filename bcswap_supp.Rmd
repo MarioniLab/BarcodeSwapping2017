@@ -82,7 +82,7 @@ knitr::include_graphics(paste0(folder_location, "/figs/schematic.png"))
 
 This swapping (also called "hopping" or "switching") of barcode labels is problematic for analyses of sequencing data.
 Reads labelled with a barcode specific to a given sample may have originated from any other multiplexed sample in the same pool, compromising the interpretation of the sample labels and their use in downstream analyses.
-This phenomenon is particularly relevant for single-cell -omics assays, where a large number of samples (i.e. cells) are necessarily multiplexed together. 
+This phenomenon is particularly relevant for single-cell -omics assays, where a large number of samples (i.e., cells) are necessarily multiplexed together. 
 
 This file steps through the analysis upon which the manuscript *Detection and Removal of Barcode Swapping in Single-Cell RNA-seq data* is based, with all code used present and accessible by clicking on the `Code` buttons.
 
@@ -109,7 +109,7 @@ libs_2500$expected[libs_2500$empty_well] = TRUE
 ```
 
 We consider two 96-well plates of single-cell RNA-seq libraries for mouse T-cells. 
-We used dual indices for cell labelling i.e. a different barcode was used at each end of the molecule. 
+We used dual indices for cell labelling, i.e., a different barcode was used at each end of the molecule. 
 The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). 
 For sequencing, all cell libraries from the two plates were multiplexed. 
 
@@ -144,7 +144,7 @@ This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file,
 
 In the absence of barcode swapping, it should be impossible to observe mapped reads with barcodes from each of the two different plates, i.e., there should be no mapped reads in the grey areas of Figure \@ref(fig:richard-schematic). 
 We will refer to these barcode combinations as "impossible" combinations, in comparison to the expected combinations in orange. 
-Note that we only consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from e.g. human or bacterial sources (especially in the empty well).
+Note that we only consider mapped reads as these are less likely to derive from various sequencing artefacts or contamination from, e.g., human or bacterial sources (especially in the empty well).
 
 Figure \@ref(fig:present-richard) shows the observed numbers of mapped reads for each barcode combination. 
 Where cells have been loaded, there are many mapped reads (yellow/green areas). 
@@ -168,11 +168,11 @@ totfrac = sum(libs$mapped[!libs$expected])/sum(libs$mapped[libs$expected])
 
 The distribution of these library sizes are shown in Figure \@ref(fig:richard-boxplot) below. 
 The impossible combinations have a median library size that is `r format(mappedfrac*100, digits = 2)`% of the median size of the expected combinations. 
-The corresponding value for all reads (i.e. mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%.
+The corresponding value for all reads (mapped and unmapped) is similar, at `r format(medfrac*100, digits = 2)`%.
 The total number of mapped reads assigned to impossible combinations is `r format(totfrac*100, digits = 2)`% of that assigned to expected combinations. 
 Note that we consider the empty well to be an "impossible" barcode combination though it does contain a low level of mapped ERCC spike-in reads.
 
-```{r richard-boxplot, fig.cap="Mapped library sizes of seeded and unseeded wells. The library sizes of the unexpected barcode combinations (i.e. wells without cells) are lower than those of the expected combinations (wells with cells), but considerably larger than 0.", message = FALSE, warning = FALSE}
+```{r richard-boxplot, fig.cap="Mapped library sizes of seeded and unseeded wells. The library sizes of the unexpected barcode combinations (i.e., wells without cells) are lower than those of the expected combinations (wells with cells), but considerably larger than 0.", message = FALSE, warning = FALSE}
 
 pdf = melt(libs)
 
@@ -709,7 +709,7 @@ ggplot(plot_df, aes(y = score, x = index)) +
 ```
 
 In these plates, the top 250 genes contain most of the informative genes. 
-We consider 500 genes to ensure that we include the infinite ratios (i.e. where the 90th percentile is 0, the ratio is not defined) and do not exclude informative genes for other plates, which may have longer tails to the distributions shown. above.
+We consider 500 genes to ensure that we include the infinite ratios (i.e., where the 90th percentile is 0, the ratio is not defined) and do not exclude informative genes for other plates, which may have longer tails than the distributions shown above.
 Only the subset of genes/rows in $Y_{2500}$ and $Y_{4000}$ are used in the downstream model fitting.
 We have also run fits considering both 250 genes and 1000 genes, and obtain similar parameter estimates (shown below, in Figure \@ref(fig:genes-var)).
 
@@ -1188,7 +1188,7 @@ This means that
 
 $$H_{0}: Y_{i,j,g}^{4000} = \alpha_{g} Y_{i,j,g}^{2500} + \epsilon_{i,j,g}$$
 
-$\alpha_g$ captures both read depth differences as well as any gene specific biases (e.g. GC content) that may change between the two sequencing machines.
+$\alpha_g$ captures both read depth differences as well as any gene specific biases (e.g., GC content) that may change between the two sequencing machines.
 
 We also consider an alternative model with a swapping term, where each cell in the HiSeq 4000 data receives swapped reads from (or transfers swapped reads to) cells that share exactly one barcode: 
 
@@ -1452,7 +1452,7 @@ For samples 1 and 2, we have $n_1$ and $n_2$ barcodes, respectively, that have b
 
 We consider the sampling of sample 2's $n_2$ barcodes as repeated draws from the total set of $N$ barcodes, of which the drawing of $n_1$ particular barcodes (those from sample 1) consitute a success.
 
-Under the null hypothesis, cell barcodes are drawn at random, and there is no increased incidence of barcode sharing. In this case, the number of shared barcodes between samples should follow a hypergeometric distribution. We test the observed $S$ against this distribution i.e. how often would we expect to see a result as or more extreme (i.e. $\geq S$) given random drawing of barcodes from the pool? 
+Under the null hypothesis, cell barcodes are drawn at random, and there is no increased incidence of barcode sharing. In this case, the number of shared barcodes between samples should follow a hypergeometric distribution. We test the observed $S$ against this distribution, i.e., how often would we expect to see a result as or more extreme ($\geq S$) given random drawing of barcodes from the pool? 
 
 ```{r 10x-functions}
 
@@ -1753,7 +1753,7 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
 
 <!-- We have shown that barcode swapping can create severe data artefacts in experimentally compromised samples. **We recommend that a test for the degree of cell barcode sharing between multiplexed droplet-based scRNA-seq samples should be carried out as a standard part of quality control for this type of data.** -->
 
-The presence of artifactual cells in this dataset is likely driven by the presence of severely compromised samples (i.e. damaged cells). 
+The presence of artifactual cells in this dataset is likely driven by the presence of severely compromised samples containing damaged cells. 
 However, it is possible that the multiplexing of cells of radically different RNA content could present similar problems. 
 We advise caution when combining experimental designs of this nature with HiSeq 4000 (or other patterned flow-cell) sequencing.
 
