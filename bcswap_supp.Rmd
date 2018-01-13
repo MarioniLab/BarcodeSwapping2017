@@ -863,13 +863,13 @@ $$
 The total number of swapped reads is
 
 $$
-\sigma \left( Y_{2500} (M_0 + M_1)\right)
+\sigma \left( Y_{2500} (R_0 + R_1)\right)
 $$
 
-We divided this by the total number of reads in the fitted model (i.e., $\sigma(Y_{2500}M)$) to obtain an estimate of the swapping fraction for each plate.
+We divided this by the total number of reads in the fitted model (i.e., $\sigma(Y_{2500}R)$) to obtain an estimate of the swapping fraction for each plate.
 
 $$
-\frac{\sigma(Y_{2500}(M_0 + M_1))}{\sigma(Y_{2500}M)}
+\frac{\sigma(Y_{2500}(R_0 + R_1))}{\sigma(Y_{2500}R)}
 $$
 
 Across plates, the mean swapping fraction is `r format(mean(rate_500)*100, digits = 4)`±`r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
@@ -904,7 +904,7 @@ In the Richard dataset, we considered swapping along rows and columns exclusivel
 We use a similar approach here by considering the fraction 
 
 $$
-\frac{\sigma(Y_{2500}(M_1))}{\sigma(Y_{2500}M)}
+\frac{\sigma(Y_{2500}(R_1))}{\sigma(Y_{2500}R)}
 $$
 
 ```{r rowcol-only}
