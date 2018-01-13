@@ -403,103 +403,91 @@ However, the estimated swapping fraction is approximately an order of magnitude 
 
 ## Dataset overview
 
-To confirm the existance of barcode swapping in another dataset, we used publicly available data from a published study [@nestorowa_single_2016], which we refer to as the Nestorowa data. 
-Each of 16 plates of single-cell libraries was pooled and sequenced in a single lane on a HiSeq 2500, and at a later date the same pooled libraries were sequenced on a HiSeq 4000. 
-Because exactly the same pools of libraries were used, the only differences between the results should be caused by the sequencing machines and Poisson sampling noise [@marioni_rna-seq:_2008]. 
+To confirm the existance of barcode swapping, we used data from another published study [@nestorowa_single_2016], which we refer to as the Nestorowa data. 
+Single-cell RNA-seq libraries on a 96-well plate were pooled together and sequenced on a single lane on a HiSeq 2500 machine.
+At a later date, the same pooled libraries were sequenced on a HiSeq 4000. 
+This procedure was performed for each of the 16 plates used in the study.
+For each plate, exactly the same pool of libraries was used in both sequencing runs, so the only differences between the results should be caused by the sequencing machines and Poisson sampling noise [@marioni_rna-seq:_2008]. 
 It is important that the libraries were not repooled as this would introduce additional variability in the pooling proportions, which would reduce the precision of our swapping fraction estimate.
 
 ```{r load-blood}
-#Load the 4000/2500 blood data
-noswap = as.matrix(read.table(paste0(folder_location, "/data/nest_2500.tab"), header = T, row.names = 1))
-swap = as.matrix(read.table(paste0(folder_location, "/data/nest_4000.tab"), header = T, row.names = 1))
+# Load the 4000/2500 blood data
+noswap <- as.matrix(read.table(paste0(folder_location, "/data/nest_2500.tab"), header = TRUE, row.names = 1))
+swap <- as.matrix(read.table(paste0(folder_location, "/data/nest_4000.tab"), header = TRUE, row.names = 1))
+plate_names <- unique(substr(colnames(swap), start = 1, stop = 8))
 
-plate_names = unique(substr(colnames(swap), start = 1, stop = 8))
+# Soe of the cells had to be re-pooled, so not sequencing the exact same libraries. Remove these.
+newpool_lanes <- which(grepl("9527", colnames(swap)) | grepl("9548", colnames(swap)) | grepl("9549", colnames(swap)) | grepl("9550", colnames(swap)))
+noswap_all <- noswap[, -newpool_lanes]
+swap_all <- swap[, -newpool_lanes]
 
-#some of the cells had to be re-pooled, so not sequencing the exact same libraries. Remove these.
-newpool_lanes = which(grepl("9527", colnames(swap)) | grepl("9548", colnames(swap)) | grepl("9549", colnames(swap)) | grepl("9550", colnames(swap)))
+# Drop spikes, should be same level in all wells --> no net swapping
+noswap <- noswap[grepl("ENSMUSG", rownames(noswap)), -newpool_lanes]
+swap <- swap[grepl("ENSMUSG", rownames(swap)), -newpool_lanes]
 
-noswap_all = noswap[, -newpool_lanes]
-swap_all = swap[, -newpool_lanes]
+# Split into plates
+blood_meta <- data.frame(cell = colnames(swap))
+split_1 <- strsplit(as.character(blood_meta$cell), split = ".", fixed = TRUE)
+blood_meta$plate <- sapply(split_1, function(x) x[2])
+split_2 <- strsplit(sapply(split_1, function(x) x[3]), split = "_")
+blood_meta$column <- sapply(split_2, function(x) x[1])
+blood_meta$row <- sapply(split_2, function(x) x[2])
 
-#drop spikes, should be same level in all wells --> no net swapping
-noswap = noswap[grepl("ENSMUSG", rownames(noswap)), -newpool_lanes]
-swap = swap[grepl("ENSMUSG", rownames(swap)), -newpool_lanes]
-#split into plates
-blood_meta = data.frame(cell = colnames(swap))
-split_1 = strsplit(as.character(blood_meta$cell), split = ".", fixed = T)
-blood_meta$plate = sapply(split_1, function(x) x[2])
-split_2 = strsplit(sapply(split_1, function(x) x[3]), split = "_")
-blood_meta$column = sapply(split_2, function(x) x[1])
-blood_meta$row = sapply(split_2, function(x) x[2])
-
-swap_split = lapply(split(as.data.frame(t(swap)), blood_meta$plate), function(x) t(as.matrix(x)))
-noswap_split = lapply(split(as.data.frame(t(noswap)), blood_meta$plate), function(x) t(as.matrix(x)))
-
-
-
+swap_split <- lapply(split(as.data.frame(t(swap)), blood_meta$plate), function(x) t(as.matrix(x)))
+noswap_split <- lapply(split(as.data.frame(t(noswap)), blood_meta$plate), function(x) t(as.matrix(x)))
 ```
 
 ## Examination of crosshair swapping patterns
 
 We identified the gene with the most read counts in a single cell in the first plate of cells - *Igkc*. 
 This gene is almost uniquely expressed in one cell in the plate. 
-On both HiSeq 2500 and 4000 machines, we observe the same "crosshair" pattern of swapping (along the row and column of a highly expressing cell) that was reported by @sinha_index_2017. 
-This is shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000).
+On both HiSeq 2500 and 4000 machines, we observe a "crosshair" pattern of expression for this gene (i.e., along the row and column of the most highly-expressing cell), as shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000).
+This is the same pattern that was reported by @sinha_index_2017 and is attributable to barcode swapping from a single donor cell library to all recipient libraries sharing a single barcode.
 
 ```{r crosshair}
-
-#small function to get the fraction of counts on the whole plate
-#in the crosshair of the maximally expressing cell
-get_fraction = function(gene, meta, counts){
-  expr = counts[gene,]
-  cell = names(expr)[which.max(expr)]
+# Small function to get the fraction of counts on the whole plate
+# in the crosshair of the maximally expressing cell
+get_fraction <- function(gene, meta, counts){
+  expr <- counts[gene,]
+  cell <- names(expr)[which.max(expr)]
   
-  bc1 = meta$column[meta$cell == cell]
-  bc2 = meta$row[meta$cell == cell]
+  bc1 <- meta$column[meta$cell == cell]
+  bc2 <- meta$row[meta$cell == cell]
   
-  cells = as.character(meta$cell[meta$column == bc1 | meta$row == bc2])
-  cells = cells[-which(cells == cell)]
-  
-  
+  cells <- as.character(meta$cell[meta$column == bc1 | meta$row == bc2])
+  cells <- cells[-which(cells == cell)]
   return(sum(expr[cells])/expr[cell])
-  
 }
 
-#generates a crosshair-like plot
-plate_plot = function(gene, meta, counts, log_transform = T, plot = F){
-  
+# Generates a crosshair-like plot
+plate_plot <- function(gene, meta, counts, log_transform = TRUE, plot = FALSE) {
   if(nrow(meta)!=ncol(counts)){
     stop("meta/counts not same size")
   }
   
   if(log_transform){
-    expr = log2(counts[gene,] + 1 )
+    expr <- log2(counts[gene,] + 1 )
   } else {
-    expr = counts[gene, ]
+    expr <- counts[gene, ]
   }
-  mat = matrix(NA, 
-               ncol = length(unique(meta$column)), 
-               nrow = length(unique(meta$row)), 
-               dimnames = list(
-                 unique(meta$row)[order(unique(meta$row))],
-                 unique(meta$column)[order(unique(meta$column))]
-               ))
-  for(i in 1:length(expr)){
-    mat[meta$row[i], meta$column[i]] = expr[i]
+
+  mat <- matrix(NA, ncol = length(unique(meta$column)), 
+                nrow = length(unique(meta$row)))
+  rownames(mat) <- unique(meta$row)[order(unique(meta$row))]
+  rownames(mat) <- unique(meta$column)[order(unique(meta$column))]
+
+  for (i in seq_along(expr)) {
+    mat[meta$row[i], meta$column[i]] <- expr[i]
   }
     
-    # pheatmap(mat, cluster_rows = F, cluster_cols = F, display_numbers = T,
-    #         color = colorRampPalette(brewer.pal(n = 7, name ="Spectral"))(100),
-    #         breaks = seq(from = 0, to = max(mat, na.rm = T) + 1e-8, length.out = 101))
-    
-    melt = melt(mat)
-    plot_out = ggplot(melt, aes(x = Var2, y = Var1)) +
-      geom_tile(aes(fill = value), color = "white") +
-      scale_fill_gradientn(colors = c("grey70", "cornflowerblue", "black"), name = "log2(count+1)") +
-      # scale_fill_viridis(name = "log2(count+1)") +
-      annotate(geom = "text", x = melt$Var2, y = melt$Var1, label = format(melt$value, digits = 2), color = "white") +
-      labs(x = "", y = "")
-    
+  melt <- melt(mat)
+  plot_out <- ggplot(melt, aes(x = Var2, y = Var1)) +
+    geom_tile(aes(fill = value), color = "white") +
+    scale_fill_gradientn(colors = c("grey70", "cornflowerblue", "black"), name = "log2(count+1)") +
+    # scale_fill_viridis(name = "log2(count+1)") +
+    annotate(geom = "text", x = melt$Var2, y = melt$Var1, label = format(melt$value, digits = 2), color = "white") +
+    labs(x = "", y = "")
+  
   if(plot){
     print(plot_out)
   }
@@ -507,50 +495,37 @@ plate_plot = function(gene, meta, counts, log_transform = T, plot = F){
 }
 ```
 
-
-```{r crosshair-2500, fig.cap="Crosshair pattern on HiSeq 2500. The highly expressed gene at position (N708, S508) is seen to increase the read counts for cells that share a single barcode. The experimental design should in the experiment does not produce this behaviour."}
-
-plate_2500 = plate_plot(gene = rownames(noswap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
+```{r crosshair-2500, fig.cap="Expression of the gene with the highest read count in any cell, across all cells on the first plate after sequencing on the HiSeq 2500."}
+plate_2500 <- plate_plot(gene = rownames(noswap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
                         meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),],
                         counts = noswap_split[[1]])
-
 print(plate_2500[[2]] + ggtitle("HiSeq 2500"))
 
-
-frac_2500 = get_fraction(gene = rownames(noswap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]],
+frac_2500 <- get_fraction(gene = rownames(noswap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]],
                          meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),],
                          counts = noswap_split[[1]])
-
-
-
 ```
 
-```{r crosshair-4000, fig.cap="Crosshair pattern on HiSeq 4000. The highly expressed gene at position (N708, S508) is seen to increase the read counts for cells that share a single barcode. The experimental design used in the experiment should not produce this behaviour."}
-
-plate_4000 = plate_plot(gene = rownames(swap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
+```{r crosshair-4000, fig.cap="Expression of the gene with the highest read count in any cell, across all cells on the first plate after sequencing on the HiSeq 4000."}
+plate_4000 <- plate_plot(gene = rownames(swap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
                         meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),],
                         counts = swap_split[[1]])
-
 print(plate_4000[[2]] + ggtitle("HiSeq 4000"))
 
-frac_4000 = get_fraction(gene = rownames(swap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
+frac_4000 <- get_fraction(gene = rownames(swap_split[[1]])[row(noswap_split[[1]])[which.max(noswap_split[[1]])]], 
                          meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),],
                          counts = swap_split[[1]])
-
-
-
 ```
 
-The pattern is clearly stronger on the HiSeq 4000. 
-There are `r format(frac_4000*100, digits = 3)`% as many *Igkc* reads in the crosshair as in the central highly expressing cell in the 4000 data, compared to `r format(frac_2500*100, digits = 3)`% for the HiSeq 2500. 
+While the crosshair pattern is present with both machines, it is clearly stronger on the HiSeq 4000. 
+There are `r format(frac_4000*100, digits = 3)`% as many *Igkc* reads in the crosshair as in the central highly-expressing cell in the HiSeq 4000 data, compared to `r format(frac_2500*100, digits = 3)`% for the HiSeq 2500. 
 This is consistent with the order-of-magnitude difference in the swapping rate between the two technologies estimated from the Richard data.
-We examine the divergence between the machines more clearly by considering the difference between the log2 counts, shown in Figure \@ref(fig:frac-plate-plot).
+The increase in *Igkc* coverage in the crosshair with the HiSeq 4000 is clearly shown by visualizing the log~2~-fold change in coverage for each cell (Figure \@ref(fig:frac-plate-plot)).
 
-```{r frac-plate-plot, fig.cap="Sequencing machine crosshair differences. The difference between the log2 counts of the gene Igkc is shown between the two sequencing machines - more reads are concentrated in the crosshair on the HiSeq 4000 than the HiSeq 2500, which is suggestive of swapping."}
-
-delta = plate_4000[[1]] - plate_2500[[1]]
-melt = melt(delta)
-plot_out = ggplot(melt, aes(x = Var2, y = Var1)) +
+```{r frac-plate-plot, fig.cap="Log~2~-fold change of the read count of the *Igkc* gene in the HiSeq 4000 data over the HiSeq 2500 in every cell of the first plate. A pseudo-count of 1 was added to avoid undefined log-fold changes."}
+delta <- plate_4000[[1]] - plate_2500[[1]]
+melt <- melt(delta)
+plot_out <- ggplot(melt, aes(x = Var2, y = Var1)) +
   geom_tile(aes(fill = value), color = "white") +
   # scale_fill_gradientn(colors = c("coral" ,"grey70", "cornflowerblue", "black"), name = "delta log2(count+1)", values = rescale(c(min(melt$value), 0, max(melt$value)/2, max(melt$value)))) +
   scale_fill_gradientn(colors = c("royalblue3" ,"grey80", "indianred3"), name = "delta log2(count+1)", values = rescale(c(min(melt$value), 0, max(melt$value)))) +
@@ -559,31 +534,28 @@ plot_out = ggplot(melt, aes(x = Var2, y = Var1)) +
   ggtitle("HiSeq 4000 - HiSeq 2500")
 
 plot_out
-
-
-
 ```
 
 These crosshair patterns demonstrate that swapping along rows and columns is the primary mode of read transfer between libraries.
-This supports our assumption that swapping is a rare event, such that swapping of both barcodes of the same transcript is especially rare. 
-Thus, we will focus on row-column swapping in the following sections.
+This supports our assumption that swapping is a rare event.
+In the vast majority of cases, swapping will occur no more than once, restricting the transfer of reads between libraries that already share a single barcode.
 
 <!-- It is possible that there are some more subtle effects - for example, an excess of barcode for a particular row or column of a plate may result in a greater amount of swapping to barcode combinations that contain this particular barcode. However, this is difficult to quantify -->
 
 ## Quantifying the swapping fraction
 
 To quantify the swapping fraction, we assume that the HiSeq 2500 data contains negligible amounts of barcode swapping compared to the HiSeq 4000.
-This means that the HiSeq 2500 data can be treated as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
+This allows us to treat the HiSeq 2500 data as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
 We applied a model that identifies contributions of different cells in the HiSeq 2500 data to the swapping-affected transcriptomes of the HiSeq 4000 data. 
 Let $Y_{4000}$ denote the $G\times C$ read count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
 Let $Y_{2500}$ denote the equivalent count matrix for the HiSeq 2500 libraries.
 
 Let $R$ denote a $C \times C$ matrix capturing the contribution of the HiSeq 2500 counts to the HiSeq 4000 counts. 
 Each entry of $R$ defines the proportion of each HiSeq 2500 library that makes up each HiSeq 4000 library.
-To illustrate; consider the entry $(c_1, c_2)$ in $R$, and multiply this value by the number of reads for cell $c_1$ in the HiSeq 2500 data.
-This represents the number of reads from cell $c_1$ in the HiSeq 2500 data that are contributed to cell $c_2$ in the HiSeq 4000 data.
+To illustrate, take the value at $(c_1, c_2)$ in $R$, and multiply it by the number of reads for cell $c_1$ in the HiSeq 2500 data.
+This represents the number of reads from a cell $c_1$ in the HiSeq 2500 data that are contributed to a cell $c_2$ in the HiSeq 4000 data.
 
-For a cell with a given pair of barcodes, we want to discriminate between the contribution of other cells with exactly one shared barcode and other cells with no shared barcodes.
+For a cell with a given pair of barcodes, we need to discriminate between the contribution of other cells with exactly one shared barcode and other cells with no shared barcodes.
 To do this, let $R = R_0 + R_1 + R_2$ where each of $R_0$, $R_1$ and $R_2$ is a matrix of the same dimensions as $R$.
 The element $(c_1, c_2)$ of each matrix is defined as
 
@@ -605,10 +577,12 @@ R_2[c_1, c_2] &= \begin{cases}
 $$
 
 The value of $\alpha$ represents the contribution of each cell in the HiSeq 2500 data to the corresponding cell in the HiSeq 4000 data.
-(This includes the "loss" of potential reads, i.e., unswapped PCR duplicates due to barcode swapping, as previously discussed for $\tau$ in the Richard analysis.)
-The value of $\beta$ depends on the row-column swapping fraction, while $\gamma$ captures swapping between barcode combinations that do not share any barcodes.
+This includes the "loss" of potential reads, i.e., unswapped PCR duplicates due to barcode swapping, as previously discussed for $\tau$ in the Richard analysis.
+The value of $\beta$ captures the rate of row-column swapping fraction from a donor cell $c_1$ to a recipient cell $c_2$, while $\gamma$ captures swapping between barcode combinations that do not share any barcodes.
+In the terminology of the framework used for the Richard analysis, we are using the HiSeq 2500 read counts for each donor cell as a proxy for the number of molecules available for swapping in the HiSeq 4000 data.
+Finally, note that all terms can be globally scaled to capture differences in sequencing depth between the HiSeq 2500 and 4000 data.
 
-We then define the relationship between the two count matrices as:
+We define the relationship between the two count matrices as:
 
 $$ Y_{4000} = Y_{2500} R + \epsilon$$
 
@@ -616,59 +590,51 @@ where $\epsilon$ represents the residual error.
 The aim is to obtain estimates of $\alpha$, $\beta$, and $\gamma$ for each plate, using information across many genes to stabilise the estimates.
 
 Gene selection is important for the fitting of this model. 
-We look at the expression of two genes on the first HiSeq 2500 plate in the dataset in Figures \@ref(fig:gene-selection-1) and \@ref(fig:gene-selection-2)
+We examine the expression of two genes on the first HiSeq 2500 plate in the dataset in Figures \@ref(fig:gene-selection-1) and \@ref(fig:gene-selection-2)
 
-```{r gene-selection-1, fig.cap = "Gene expression pattern of gene A. The expression of gene A is shown in log-counts for cells on the first plate of this dataset."}
-
-rowMax = function(mat){
+```{r gene-selection-1, fig.cap ="Gene expression pattern of gene A, shown in log-counts for all cells on the first plate."}
+rowMax <- function(mat){
   return(apply(mat, 1, max))
 }
 
-#pull out some genes for demo of selection
-gene_vars = apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
-gene_vars = gene_vars[order(gene_vars, decreasing = TRUE)]
+# Pull out some genes for demonstrating selection
+gene_vars <- apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
+gene_vars <- gene_vars[order(gene_vars, decreasing = TRUE)]
 
-plot1 = plate_plot(gene = names(gene_vars[30]), meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),], counts = noswap_split[[1]], log_transform = TRUE, plot = FALSE)
-
-print(plot1[[2]] +ggtitle("Gene A"))
-
+plot1 <- plate_plot(gene = names(gene_vars[30]), meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),], 
+    counts = noswap_split[[1]], log_transform = TRUE, plot = FALSE)
+print(plot1[[2]] + ggtitle("Gene A"))
 ```
 
-
-```{r gene-selection-2, fig.cap="Gene expression pattern of gene B. The expression of gene B is shown in log-counts for cells on the first plate of this dataset. Gene B is expressed widely across the plate."}
-plot2 = plate_plot(gene = names(gene_vars[1000]), meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),], counts = noswap_split[[1]], log_transform = TRUE, plot = FALSE)
-
+```{r gene-selection-2, fig.cap="Gene expression pattern of gene B, shown in log-counts for all cells on the first plate."}
+plot2 <- plate_plot(gene = names(gene_vars[1000]), meta = blood_meta[blood_meta$cell %in% colnames(noswap_split[[1]]),], 
+    counts = noswap_split[[1]], log_transform = TRUE, plot = FALSE)
 print(plot2[[2]] + ggtitle("Gene B"))
-
-
-
 ```
 
 Both genes are expressed in only a subset of the cells on the plate, but gene B is expressed much more broadly than gene A. 
-This poses a problem for our model: for gene B, it is harder for the model to distinguish between contributions from other cells on the row and column of a certain cell ($\beta$), and from all the other cells on the plate ($\gamma$), because many cells in both of these sets express the gene at high levels. 
-By contrast, gene A is expressed at a high level in only very few cells; it is therefore easier for the model to distinguish between large values of $\beta$ and $\gamma$. 
-Genes that are expressed broadly in the manner of gene B are therefore less informative than genes like gene A for the model fit. 
+For gene B, it is harder for the model to distinguish between contributions from other cells on the row and column of a certain cell ($\beta$) or from all the other cells on the plate ($\gamma$), because many cells in both of these sets express the gene at high levels. 
+By contrast, gene A is expressed at a high level in only very few cells, making it easier for the model to distinguish between large values of $\beta$ and $\gamma$. 
+Genes expressed broadly in the manner of gene B are therefore less informative for model fitting than those expressed like gene A.
 
-In order to capture the most informative genes, we first subset the count matrices $Y_{2500}$ and $Y_{4000}$ by expression levels.
-Genes (i.e., rows) are retained if they are present at a minimum level of 500 counts in at least one cell in the HiSeq 2500 data. 
+To identify the most informative genes on a single plate, we define the "information score" for each gene as the ratio of the maximum expression value to its 90th percentile.
+This value will be highest when only a very few cells on the plate are highly expressing the gene.
+We only calculate this score for genes that are present at a minimum level of 500 counts in at least one cell in the HiSeq 2500 data. 
 It is important to have a large number of transcripts present, otherwise swapping may be too rare to detect.
-Then, to find informative genes, we rank them according to their maximum expression on the plate divided by the 90th percentile expression. 
-This value will be highest when only a very few cells are highly expressing a gene.
+The information scores are plotted in Figure \@ref(fig:gene-vars) for a few randomly chosen plates.
 
-These scores are plotted in decreasing order for a few plates chosen at random in Figure \@ref(fig:gene-vars):
-
-```{r gene-vars, warning=FALSE, fig.cap="Informative genes for four plates. For four plates, chosen at random from the dataset, genes are ranked in descending order by ratio of their maximum expression on the plate and the 90% quantile expression. Genes are plotted in descending order, with infinite values of the ratio excluded from plots, but used in the models (there are at most 33 such ratios in one plate). Only the top 1000 genes are shown."}
+```{r gene-vars, warning=FALSE, fig.cap="Top 1000 genes by the highest information scores, ranked in descending order. Genes with infinite scores are excluded from the plots but used in the models (there are at most 33 such ratios in one plate). Information scores are computed separately for each gene in each plate."}
 set.seed(42)
-plates = sample(length(noswap_split), 4)
-gene_vars = lapply(plates, function(i) 
+plates <- sample(length(noswap_split), 4)
+gene_vars <- lapply(plates, function(i) 
   apply(noswap_split[[i]][rowMax(noswap_split[[i]])>500,], 1,  function(x) max(x)/quantile(x, 0.9)))
-gene_vars = lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
-gene_vars = lapply(gene_vars, function(x) x[x!=Inf])
+gene_vars <- lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
+gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
-plate_ids = lapply(1:length(gene_vars), function(x) rep(plates[x], length(gene_vars[[x]])))
-indices = lapply(gene_vars, function(x) 1:length(x))
+plate_ids <- lapply(1:length(gene_vars), function(x) rep(plates[x], length(gene_vars[[x]])))
+indices <- lapply(gene_vars, function(x) 1:length(x))
 
-plot_df = data.frame(score = unlist(gene_vars), plate = paste("plate", unlist(plate_ids)), index = unlist(indices))
+plot_df <- data.frame(score = unlist(gene_vars), plate = paste("plate", unlist(plate_ids)), index = unlist(indices))
 
 ggplot(plot_df, aes(y = score, x = index)) +
   geom_point(size = 0.5, col = "darkgrey") +
@@ -676,50 +642,43 @@ ggplot(plot_df, aes(y = score, x = index)) +
   scale_y_log10(breaks = c(10, 100, 1000), labels = c("10", "100", "1,000"), name = "max / 90% quantile") +
   theme_bw() +
   lims(x = c(1, 1000))
-
-
-
 ```
 
-In these plates, the top 250 genes contain most of the informative genes. 
-We consider 500 genes to ensure that we include the infinite ratios (i.e., where the 90th percentile is 0, the ratio is not defined) and do not exclude informative genes for other plates, which may have longer tails than the distributions shown above.
-Only the subset of genes/rows in $Y_{2500}$ and $Y_{4000}$ are used in the downstream model fitting.
-We have also run fits considering both 250 genes and 1000 genes, and obtain similar parameter estimates (shown below, in Figure \@ref(fig:genes-var)).
+For each plate, the top 250 genes contain most of the informative genes. 
+We identify the top 500 genes with the highest information scores and use only the corresponding rows in $Y_{2500}$ and $Y_{4000}$ for downstream model fitting.
+We consider 500 genes to ensure that we include the infinite scores (i.e., where the 90th percentile is 0) and do not exclude informative genes for other plates, which may have longer tails than the distributions shown above.
+We have also repeated the fits using the top 250 or 1000 genes, which yield similar estimates of the $\alpha$, $\beta$ and $\gamma$ parameters (see below, Figure \@ref(fig:genes-var)).
+Note that the chosen subset of genes will differ between plates, but this does not affect the comparability of the parameter estimates between plates.
 
-Notably, the maximum expression value on a plate does not substantially drive selection of genes, shown for two plates in Figure \@ref(fig:gene-selection-max).
+We emphasize that the maximum expression value on a plate does not substantially drive selection of genes (Figure \@ref(fig:gene-selection-max)).
+This means that we are not simply selecting for genes with high maximum expression.
+Rather, we are identifying genes where the maximum expression value is a clear outlier relative to expression in other cells on the plate.
 
-```{r gene-selection-max, fig.cap="Effect of expression magnitude on gene selection. The ratio we use to select genes is not driven strongly by the size of the numerator: we are not simply selecting for genes with the highest expression in one cell."}
+```{r gene-selection-max, fig.cap="Relationship between the maximum expression and the information score for each gene, using two randomly chosen plates."}
+vars_1 <- apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
+maxs_1 <- rowMax(noswap_split[[1]][rowMax(noswap_split[[1]])>500,])
+keep_1 <- vars_1 >= vars_1[order(vars_1, decreasing = TRUE)][500]
 
+vars_2 <- apply(noswap_split[[2]][rowMax(noswap_split[[2]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
+maxs_2 <- rowMax(noswap_split[[2]][rowMax(noswap_split[[2]])>500,])
+keep_2 <- vars_2 >= vars_2[order(vars_2, decreasing = TRUE)][500]
 
-vars_1 = apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
-maxs_1 = rowMax(noswap_split[[1]][rowMax(noswap_split[[1]])>500,])
-keep_1 = vars_1 >= vars_1[order(vars_1, decreasing = TRUE)][500]
-
-vars_2 = apply(noswap_split[[2]][rowMax(noswap_split[[2]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
-maxs_2 = rowMax(noswap_split[[2]][rowMax(noswap_split[[2]])>500,])
-keep_2 = vars_2 >= vars_2[order(vars_2, decreasing = TRUE)][500]
-
-plot_df = data.frame(score = c(vars_1, vars_2), max = c(maxs_1, maxs_2), plate = c(rep("Plate 1", length(vars_1)), rep("Plate 2", length(vars_2))), keep = c(keep_1, keep_2))
-
-plot_df = plot_df[plot_df$score!= Inf,]
+plot_df <- data.frame(score = c(vars_1, vars_2), max = c(maxs_1, maxs_2), plate = c(rep("Plate 1", length(vars_1)), rep("Plate 2", length(vars_2))), keep = c(keep_1, keep_2))
+plot_df <- plot_df[plot_df$score!= Inf,]
 
 ggplot(plot_df, aes(x = max, y = score, col = factor(keep))) +
   geom_point() +
   facet_grid(. ~ plate) +
   scale_x_log10(name = "Maximum gene expression count", breaks = 10^(3:5), labels = c("1,000", "10,000", "100,000")) + scale_y_log10("Max/90% score") +
   scale_color_manual(labels = c("Dropped gene", "Analysed gene"), name = "", values = c("darkgrey", "coral"))
-  
-
 ```
 
 We used Poisson precision weights in our model to account for the mean-variance relationship of count data.
-Counts were weighted by the reciprocal of the square-root of their gene's mean expression, to prevent the most highly expressed genes dominating the least-squares fit. 
+Counts were weighted by the reciprocal of the square-root of their gene's mean expression, to ensure that the most highly-expressed genes do not dominate the least-squares fit. 
 We fitted a constrained linear inverse model using the `r CRANpkg("lsei")` package, to avoid obtaining negative values of $\alpha$, $\beta$, and $\gamma$. 
 Gene subsetting and fitting of the model was performed separately for each plate of cells, so each plate uses its own informative gene set.
 
 ```{r estimate-rate}
-
-
 #Function written largely by Aaron Lun
 #Key function to estimating the contributions
 # ARGS:
@@ -888,15 +847,14 @@ rate_500 = sapply(run_500, calc_rate)
 rate_250 = sapply(run_250, calc_rate)
 rate_1000 = sapply(run_1000, calc_rate)
 rate_sample = sapply(run_sample, calc_rate)
-
-
 ```
 
-Across the `r length(swap_split)` plates assayed, we acquired a distribution of fitted values. For example, we observe values between `r format(min(sapply(run_500, function(x) x$params[2])), digits = 3)` and `r format(max(sapply(run_500, function(x) x$params[2])), digits = 3)` for the single shared barcode contribution term $\beta$. 
+Across the `r length(swap_split)` plates assayed, we acquired a distribution of estimates for each parameter in $R$.
+For example, we observe values between `r format(min(sapply(run_500, function(x) x$params[2])), digits = 3)` and `r format(max(sapply(run_500, function(x) x$params[2])), digits = 3)` for the single shared barcode contribution term $\beta$. 
 
-To quantify the swapping fraction, we estimated the number of reads in the HiSeq 4000 libraries that were contributed from the HiSeq 2500 libraries via swapping.
-We include both single barcode swaps ($M_1$) and double barcode swaps ($M_0$) in this estimate.
-We denote summation of the elements $x_{i,j}$ of the matrix $X$ as
+To calculate the swapping fraction for each plate, we estimated the number of reads in the HiSeq 4000 libraries that were contributed from the HiSeq 2500 libraries via swapping.
+We include both single barcode swaps ($R_1$) and double barcode swaps ($R_0$) in this estimate.
+For simplicity, let us denote the summation of all elements $x_{i,j}$ of the matrix $X$ as
 
 $$
 \sigma \left( X \right) = \sum_i \sum_j x_{i,j}
@@ -908,73 +866,29 @@ $$
 \sigma \left( Y_{2500} (M_0 + M_1)\right)
 $$
 
-We divided this by the total number of reads in the fitted model (i.e., $Y_{2500}M$) to obtain an estimate of the swapping fraction for each plate.
+We divided this by the total number of reads in the fitted model (i.e., $\sigma(Y_{2500}M)$) to obtain an estimate of the swapping fraction for each plate.
 
 $$
 \frac{\sigma(Y_{2500}(M_0 + M_1))}{\sigma(Y_{2500}M)}
 $$
 
-This provides an estimate for the mean swapping rate of `r format(mean(rate_500)*100, digits = 4)`±`r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
+Across plates, the mean swapping fraction is `r format(mean(rate_500)*100, digits = 4)`±`r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
 
-
-Similar results were obtained with the top 250 (`r format(mean(rate_250)*100, digits = 4)`±`r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)`±`r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%%) most informative genes per plate. 
-We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates of the swapping fraction (`r format(mean(rate_sample)*100, digits = 4)`±`r format(sqrt(var(rate_sample)/length(rate_sample))*100, digits = 3)`%).
-
-```{r plot-contrib, fig.cap="Fitted values for single-barcode-sharing contributions. The contributions for cells that share one barcode are shown above, where replicates are for different plates of single cells. Different fitted values may derive from truly different swapping rates, or differences in the number of informative genes. 500 genes were used for these calculations."}
-
+```{r plot-contrib, fig.cap="Estimates of the swapping fraction for all plates, using the top 500 most informative genes for each plate."}
 hist(rate_500, breaks = 20, xlim = c(0, 0.08), main = "", xlab = "Estimated swapping rate")
-
-
-
 ```
 
-```{r rowcol-only}
-calc_rate_rowcol = function(mix_mat_list){
-  
-  params = mix_mat_list$params
-  beta = mix_mat_list$beta
-  
-  r0 = matrix(data = c(params[1], 0, 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
-  r1 = matrix(data = c(0, params[2], 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
-  r2 = matrix(data = c(0, 0, params[3])[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
-  
-  top = sum(mix_mat_list$count_2500 %*% (r1))
-  bottom = sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
-  
-  return(top/bottom)
+We obtained similar results with the top 250 (`r format(mean(rate_250)*100, digits = 4)`±`r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)`±`r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%%) most informative genes per plate.
+We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates (`r format(mean(rate_sample)*100, digits = 4)`±`r format(sqrt(var(rate_sample)/length(rate_sample))*100, digits = 3)`%).
+The variance of the swapping fraction estimates for different numbers of informative genes on the same plate is smaller than the variance across plates (Figure \@ref(fig:genes-var)), indicating that the number of informative genes used in the model fit is not the major contributor to differences in the estimates between plates.
 
-}
-
-rate_500_rowcol = sapply(run_500, calc_rate_rowcol)
-
-```
-
-In the Richard dataset, we considered swapping along rows and columns exclusively. We can take a similar approach here, considering the rate
-
-$$
-\frac{\sigma(Y_{2500}(M_1))}{\sigma(Y_{2500}M)}
-$$
-
-This provides an estimated row-column swapping rate mean of `r format(mean(rate_500_rowcol)*100, digits = 4)`±`r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100, digits = 3)`%. The row-column swapping rates are well correlated with the total swapping rates (Figure \@ref(fig:rate-comp))
-
-```{r rate-comp, fig.cap = "Total swapping rates are well correlated with row-column swapping rates. The line has intercept 0, slope 1."}
-
-qplot(rate_500, rate_500_rowcol) +
-  theme_bw() +
-  geom_abline(slope = 1) +
-  labs(x = "Total swapping rate", y = "Row-column swapping rate")
-
-```
-
-
-```{r genes-var, fig.cap="Swapping rate estimates for different numbers of considered genes. '500 Sampled' refers to 500 genes selected at random from the top 1000 genes. The variance of the estimated swapping rate for each plate for different numbers of considered genes is much smaller than the differences in swapping rate observed between plates."}
-
-rate_est = c(rate_250, 
+```{r genes-var, fig.cap="Swapping fraction estimates for all plates, using different numbers of informative genes in the model fit. '500 Sampled' refers to 500 genes selected at random from the top 1000 genes."}
+rate_est <- c(rate_250, 
              rate_1000, 
              rate_500,
              rate_sample)
 
-genes = c(rep(250, 16),
+genes <- c(rep(250, 16),
           rep(1000, 16),
           rep(500, 16),
           rep("500 Sampled", 16))
@@ -985,94 +899,112 @@ ggplot(data.frame(genes = genes, rate = rate_est, plate = rep(1:16, 4)),
   theme_bw() +
   scale_color_brewer(palette = "Set1", name = "Number\nof genes\nconsidered") +
   labs(x = "Plate", y = "Swapping rate estimate")
+```
+In the Richard dataset, we considered swapping along rows and columns exclusively. 
+We use a similar approach here by considering the fraction 
 
+$$
+\frac{\sigma(Y_{2500}(M_1))}{\sigma(Y_{2500}M)}
+$$
+
+```{r rowcol-only}
+calc_rate_rowcol <- function(mix_mat_list) {
+  params <- mix_mat_list$params
+  beta <- mix_mat_list$beta
+  
+  r0 <- matrix(data = c(params[1], 0, 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r1 <- matrix(data = c(0, params[2], 0)[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  r2 <- matrix(data = c(0, 0, params[3])[beta], nrow = nrow(beta), dimnames = list(rownames(beta), colnames(beta)))
+  
+  top <- sum(mix_mat_list$count_2500 %*% (r1))
+  bottom <- sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
+  return(top/bottom)
+}
+
+rate_500_rowcol <- sapply(run_500, calc_rate_rowcol)
 ```
 
-Additionally, the mean value of the gene selection score (i.e., the maximum expression on each plate divided by the 90th percentile) for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
+This yields an estimated row-column swapping fraction of `r format(mean(rate_500_rowcol)*100, digits = 4)`±`r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100, digits = 3)`%. 
+These row-column swapping fractions are well-correlated with the total swapping fractions (Figure \@ref(fig:rate-comp)).
+
+```{r rate-comp, fig.cap = "Relationship between the total swapping fraction and the row-column swapping rates. The identity line is shown for comparison."}
+qplot(rate_500, rate_500_rowcol) +
+  theme_bw() +
+  geom_abline(slope = 1) +
+  labs(x = "Total swapping rate", y = "Row-column swapping rate")
+```
+
+
+Additionally, the mean value of the information score for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
 This indicates that the expression abundance of sporadically expressed genes does not drive differences in the swapping fraction estimates.
 
-```{r genes-inf, fig.cap="Swapping rate estimation is independent of the selected gene influence. The mean gene score (the maximum expression on each plate divided by the 90th percentile) for the first 500 genes on each plate (excluding Inf) does not affect the estimated swapping rate."}
-
-plates = 1:length(noswap_split)
-gene_vars = lapply(plates, function(i)    
+```{r genes-inf, fig.cap="Relationship between the swapping fraction estimate from each plate and the mean information score for the top 500 genes."}
+plates <- 1:length(noswap_split)
+gene_vars <- lapply(plates, function(i)    
   apply(noswap_split[[i]][rowMax(noswap_split[[i]])>500,], 1,  
         function(x) max(x)/quantile(x, 0.9)))
-gene_vars = lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
-gene_vars = lapply(gene_vars, function(x) x[x!=Inf])
+gene_vars <- lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
+gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
-means = sapply(gene_vars, mean)
-
+means <- sapply(gene_vars, mean)
 ggplot(data.frame(mean = means, rate = rate_500),
        aes(x = mean, y = rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Mean gene score for top 500 genes (no Inf)",
        y = "Swapping rate estimate")
-
 ```
-
 
 ## Linking swapping rate to library characteristics
 
-@sinha_index_2017 increased the swapping rate by titrating larger amounts of free barcode into their sequencing libraries. 
-However, this does not, by itself, explain the diversity of swapping rates that we observe for conventionally designed sequencing libraries.
+To attempt to understand the variance of our swapping fraction estimates, we examined the concentration of free barcodes on each plate. 
+Using the Bioanalyzer Expert software (Figure \@ref(fig:expert)), we quantified the barcode concentration in each multiplexed pool based on the area under the peak at 40-75 bp.
+By comparison, sequenced cDNA should fall within the peak at 400-800 bp. 
 
-To understand swapping in this data, we have recorded the molarity of the library at different molecule lengths from the Bioanalyzer software package. 
-In particular, we have considered library barcodes at 40-75 bp, and sequenced cDNA at 400-800 bp. 
-A screenshot from Bioanalyzer's Expert software is shown in Figure \@ref(fig:expert).
-
-```{r expert, fig.cap="Bioanalyzer screenshot. The range 40-75bp corresponds to free DNA barcode, while cDNA lengths of 400-800bp are those that are expected to be sequenced in HiSeq 4000."}
-
+```{r expert, echo=FALSE, fig.cap="Screenshot of an analysis of molecule lengths from a single plate, using the Bioanalyzer Expert software. Region 1 (40-75 bp) corresponds to free DNA barcode, while region 2 (400-800 bp) corresponds to cDNA that can be sequenced on the HiSeq 4000."}
 knitr::include_graphics(paste0(folder_location, "/figs/bioanalyzer.png"))
-
 ```
 
 The molarities of each sample are shown in Figure \@ref(fig:load-bioanalyzer), overlaid with the calculated swapping rates. 
 
-```{r load-bioanalyzer, fig.wide = TRUE, fig.cap = "bioanalyzer-calculated molarites and swapping rates"}
+```{r load-bioanalyzer, fig.wide = TRUE, fig.cap = "Molarities of cDNA and free barcode for each plate, quantified using the Bioanalyzer software. The size and colour of the point corresponding to each plate is determined based on its estimate of the swapping fraction."}
+load_bio_csv <- function(filepath){
+  input <- read.table(filepath, sep = ",", header = FALSE)
 
-load_bio_csv = function(filepath){
-  input = read.table(filepath, sep = ",", header = FALSE)
-  #test for ranges
-  from_col = which(input[1,] == "From [bp]")
-  test1 = all(c(40, 400) %in% input[-1, from_col])
-  to_col = which(input[1,] == "To [bp]")
-  test2 = all(c(75, 800) %in% input[-1, to_col])
+  # Test for ranges
+  from_col <- which(input[1,] == "From [bp]")
+  test1 <- all(c(40, 400) %in% input[-1, from_col])
+  to_col <- which(input[1,] == "To [bp]")
+  test2 <- all(c(75, 800) %in% input[-1, to_col])
 
   if(!(test1 & test2))
     stop("You don't appear to have the correct ranges specified (40-75; 400-800)")
 
-  #keep important columns
-  cols = c("Average Size [bp]" = "avg_size_bp",
+  # Keep important columns
+  cols <- c("Average Size [bp]" = "avg_size_bp",
            "Conc. [pg/\xb5l]" = "conc_pgul",
            "From [bp]" = "from_bp",
            "To [bp]" = "to_bp",
            "Molarity [pmol/l]" = "molarity_pmoll")
   
-  input = input[, match(names(cols), as.character(unlist(input[1,])))]
+  input <- input[, match(names(cols), as.character(unlist(input[1,])))]
+  names(input) <- cols
+  input <- input[-1,]
 
-  names(input) = cols
-  input = input[-1,]
-
-  for(col in 1:ncol(input)){
-    input[,col] = gsub(",", "", input[,col])
-    input[,col] = as.numeric(as.character(input[,col]))
+  for(col in seq_len(ncol(input))) {
+    current <- gsub(",", "", input[,col])
+    input[,col] <- as.numeric(current)
   }
-  
   return(input)
-
 }
 
-#recall that we skip the last 4 plates as these were re-pooled
-dfs = lapply(1:16, function(i) load_bio_csv(paste0(folder_location, "/data/bioanalyzer/sample", i, ".csv")))
-names(dfs) = plate_names[1:16]
+# Recall that we skip the last 4 plates as these were re-pooled
+dfs <- lapply(1:16, function(i) load_bio_csv(paste0(folder_location, "/data/bioanalyzer/sample", i, ".csv")))
+names(dfs) <- plate_names[1:16]
 
-plot_df = as.data.frame(t(sapply(1:16, function(i) c(bc_mol = dfs[[i]][1, "molarity_pmoll"],
+plot_df <- as.data.frame(t(sapply(1:16, function(i) c(bc_mol = dfs[[i]][1, "molarity_pmoll"],
                                                      seq_mol = dfs[[i]][2, "molarity_pmoll"],
                                                      swap_rate = rate_500[i]))))
-
-conc_df = plot_df
-
 ggplot(plot_df, aes (x = bc_mol, y= seq_mol, col = swap_rate, size = swap_rate)) +
   geom_point() +
   scale_color_viridis(name = "Swap Rate") +
@@ -1080,80 +1012,71 @@ ggplot(plot_df, aes (x = bc_mol, y= seq_mol, col = swap_rate, size = swap_rate))
   scale_size_continuous(name = "Swap Rate") +
   labs(x = "Barcode molarity (pmol/L)", y = "Sequenced cDNA molarity (pmol/L)")
 
+# For later use.
+conc_df <- plot_df
 ```
 
 We do not observe any obvious association between these measures. 
+This is demonstrated more clearly in Figure \@ref(fig:plot-rates), where the swapping fractions are plotted directly against the molarity of free barcode.
 
-In Figure \@ref(fig:plot-rates), the swapping rates are plotted directly against the molarity of free barcode.
-
-```{r plot-rates, fig.cap = "Swapping rate is not driven by free barcode molarity"}
-
-
+```{r plot-rates, fig.cap = "Estimated swapping fraction for each plate, plotted against the molarity of free barcode."}
 ggplot(plot_df, aes(x = bc_mol, y= swap_rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Barcode molarity (pmol/L)", y = "Calculated swapping rate")
 
-
-model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol))
-
+model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol))
 ```
 
 The gradient in a linear model fitted to the swapping fraction against the barcode molarity is not significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`).
-This reflects the absence of a clear association between these two values.
+Similarly, we do not observe any correlation between the swapping fraction and the ratio of free barcode to captured cDNA (Figure \@ref(fig:plot-ratio)).
 
-Similar behaviour is observed for the ratio of free barcode to captured cDNA, as shown in Figure \@ref(fig:plot-ratio).
-
-```{r plot-ratio, fig.cap = "Swapping rate is not driven by excess of free barcode compared to sequenced cDNA"}
-
+```{r plot-ratio, fig.cap = "Estimated swapping fraction for each plate, plotted against the ratio of free barcode concentration to cDNA concentration."}
 ggplot(plot_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Barcode molarity / Sequenced cDNA molarity", y = "Calculated swapping rate")
 
-model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_mol))
-
-model_outlier = lm(data = plot_df[-which.max(plot_df$bc_mol/plot_df$seq_mol),], formula = swap_rate ~ I(bc_mol/seq_mol))
-
+model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_mol))
+model_outlier <- lm(data = plot_df[-which.max(plot_df$bc_mol/plot_df$seq_mol),], formula = swap_rate ~ I(bc_mol/seq_mol))
 ```
 
-Again, the slope in the fitted linear model is not significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`, p=`r format(coef(summary(model_outlier))[2,4], digits = 3)` with the high-ratio outlier removed from extreme right of plot).
+Again, the slope in the fitted linear model is not significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`, p=`r format(coef(summary(model_outlier))[2,4], digits = 3)` after removing the high-ratio outlier at the right).
 
-The molarity calculations may also contain barcode concatamers, which do not align to the mouse genome and are irrelevant to our swapping fraction estimation.
-In Figure \@ref(fig:plot-proxy), we repeat the approach used in Figure \@ref(fig:plot-ratio), but use the total number of mapped reads per plate as a proxy for the amount of sequenced cDNA.
+The molarity calculations for the sequenced cDNA may contain barcode concatamers, which do not align to the mouse genome and are irrelevant to our swapping fraction estimation.
+These concatemers may distort the estimate for the concentration of cDNA on each plate.
+To overcome this, we repeat the approach used in Figure \@ref(fig:plot-ratio), but use the total number of mapped reads per plate as a proxy for the amount of sequenced cDNA (Figure \@ref(fig:plot-proxy)). 
 
-```{r plot-proxy, fig.cap = "Swapping rate is not driven by excess of free barcode compared to sequenced cDNA. Here, the total number of alignable reads per plate has been considered to exclude barcode concatamers, which may be seen on the bioanalyzer trace."}
-
-seq_proxy = sapply(1:16, function(x) sum(swap_split[[x]]))
-
+```{r plot-proxy, fig.cap = "Estimated swapping fraction for each plate, plotted against the ratio of free barcode concentration to the total number of mapped reads."}
+seq_proxy <- sapply(1:16, function(x) sum(swap_split[[x]]))
 
 ggplot(plot_df, aes(x = bc_mol/seq_proxy, y= swap_rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Barcode molarity / Total aligned reads", y = "Calculated swapping rate")
 
-model = lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_proxy))
-
-
+model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_proxy))
 ```
 
-However, we still do not see a slope signifiacntly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`)
+However, we still do not see a slope signifiacntly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`).
 
-In summary, our calculated swapping rates are not associated with the amount of free barcode in libraries, nor the ratio of free barcode to cDNA quantity. 
+In summary, our calculated swapping rates are not associated with the amount of free barcode in libraries, nor the ratio of free barcode to cDNA concentration. 
 This contrasts with @sinha_index_2017, who showed that titrations of increasing amounts of additional free primer (1 nM, 10 nM, 100 nM) increased the rate of barcode swapping. 
-However, their most notable result was that with 100nM of free barcode, which is far in excess of standard experimental quantities. 
-Our analysis suggests that the amount of free barcode has little bearing on the rate of swapping when the amount of free barcode is at standard experimental levels - for example, in this data we observed concentrations of 2-6 nM.
+We note that their clearest result was that using 100nM of free barcode, which is far in excess of standard experimental quantities. 
+Our analysis suggests that the concentration of free barcode has little bearing on the rate of swapping at typical experimental levels (2-6 nM in this data).
 
 ## Testing for transcriptome-wide swapping
 
-In the crosshair plots shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000), we showed a swapping pattern for a single gene for a single plate. 
+In Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000), we showed a crosshair swapping pattern for a single gene for a single plate. 
 We now apply a model to each gene across all plates to determine whether swapping is happening consistently across genes.
 This differs from the previous model, which used information from many genes simultaneously to obtain a global estimate of the swapping rate for each plate.
 
 Let $i$ denote the row index for a cell on a single 96 well plate ($1 \leq i \leq 8$) and let $j$ denote a cell's column index ($1 \leq j \leq 12$). 
 Subsequently, let $Y_{i,j,g}^{(t)}$ denote the read count of gene $g$ in cell $(i,j)$ when profiled using sequencing technology $t$, where $t=2500$ refers to the HiSeq 2500 and $t=4000$ refers to the HiSeq 4000. 
-Additionally, let 
+Additionally, let
+
 $$S_{i,j,g}^{(t)} = \sum_{k=1}^{12} Y_{i,k,g}^{(t)}  + \sum_{l=1}^{8} Y_{l,j,g}^{(t)} - 2 Y_{i,j,g}^{(t)}$$ 
+
 represent the total read count of gene $g$ in technology $t$ across all other cells on this plate sharing an index with $(i, j)$.
 
 We first consider a null model without swapping where, for cell $(i,j)$, the number of reads mapped to each gene $g$ in the HiSeq 4000 data set is only dependent on the number of reads mapped to the same cell in the HiSeq 2500 data. 
@@ -1167,25 +1090,24 @@ We also consider an alternative model with a swapping term, where each cell in t
 
 $$H_{1}: Y_{i,j,g}^{4000} = \alpha_g Y_{i,j,g}^{2500} + \beta_g \left( S_{i,j,g}^{2500} - Y_{i,j,g}^{2500} \right) + \epsilon_{i,j,g}$$
 
-$\beta_g$ allows the strength of the swapping term to vary between genes, so that we can identify whether all genes are consistently affected by swapping.
-$S_{i,j,g}^{2500}$ represents the pool of available reads that can be transferred into the library for cell $(i,j)$ due to swapping of one barcode.
-$Y_{i,j,g}^{2500}$ represents the pool of reads that can be transferred from  $(i,j)$ to other libraries.
-This is equivalent to the "loss" of PCR duplicate reads due to barcode swapping.
+$\beta_g$ allows the strength of the swapping term to vary between genes, so that we can determine whether all genes are consistently affected by swapping.
+$S_{i,j,g}^{2500}$ represents the pool of available reads from donor libraries that can be transferred into the recipient library for cell $(i,j)$ due to swapping of one barcode.
+$Y_{i,j,g}^{2500}$ represents the pool of reads that can be transferred from the donor cell $(i,j)$ to other recipient libraries.
+(This represents the "loss" of PCR duplicate reads due to barcode swapping.)
 
 Models $H_1$ and $H_0$ are fitted by least squares to high-abundance genes, i.e., mean counts greater than 50 across all plates.
-This focuses on genes that have sufficient reads for swapping to clearly manifest - in contrast, genes with low or zero counts provide no information about the presence or absence of swapping.
+This focuses on genes that have sufficient reads for swapping to clearly manifest.
+In contrast, genes with low or zero counts provide no information about the presence or absence of swapping.
 The use of least squares assumes a normal distribution for the errors, which is reasonable for large Poisson-distributed counts.
 
 For each gene, evidence against $H_{0}$ in favour of $H_{1}$ is established by performing an F-test (as the models are nested).
 The use of the swapping term significantly improves the model fit to the data when $H_{1}$ is favoured over $H_{0}$.
-
-In addition, we expect that $\beta > 0$.
+In addition, we expect that $\beta > 0$, i.e., swapping moves reads from donor libraries to recipient libraries.
 If $\beta < 0$, the behaviour of swapping is inverted compared to the other work presented above.
 
 When the model is applied, the vast majority of genes favour $H_{1}$ with $\beta>0$, as shown in Figure \@ref(fig:subset-highexpr)
 
-```{r subset-highexpr, fig.cap="Gene-wise swapping model fits. Gene-wise model fits are shown, separated by whether the swapping model is preferred over the null model. Y-axis values correspond to the number of genes in each category."}
-
+```{r subset-highexpr, fig.cap="Number of genes where the alternative swapping model ($H_1$) offers a significantly improved fit over the null model ($H_0$) with a positive (blue) or negative estimate of $\beta_g$ (red).}
 #This chunk is very slow and computationally intensive. Change the min.mean setting in the line starting
 # "gene_dfs = " if you need to speed it up.
 
@@ -1353,13 +1275,9 @@ ggplot(plot_df, aes(x = factor(sig, levels = c(TRUE, FALSE), ordered = TRUE), y 
   scale_fill_manual(values = c("#23809C", "#7A1305"), name = "", labels = c("Coefficient sign supports swapping\n(beta > 0)", "Coefficient sign opposes swapping\n(beta < 0)"))
 
 support_frac = sum(gradients > 0 & anova_fdr < 0.05)/sum(anova_fdr < 0.05)
-
-
-
 ```
 
 ```{r run-2500}
-
 counts_lanes = as.matrix(read.csv(paste0(folder_location, "/data/wilson_2500.csv")))
 counts_lanes = counts_lanes[rowSums(counts_lanes)>0,]
 #split to the two sub_matrices
@@ -1370,7 +1288,6 @@ colnames(counts_2) = gsub("_new", "", colnames(counts_2))
 bc1s = sapply(strsplit(colnames(counts_1), "_"), function(x) x[1])
 bc2s = sapply(strsplit(colnames(counts_1), "_"), function(x) x[2])
 
-
 #for the two lane 2500
 #match the name format to the other plates just for this
 lane_1 = counts_1; colnames(lane_1) = paste0("some.name.", colnames(lane_1))
@@ -1379,20 +1296,16 @@ twolane_meta = data.frame(cell = c(colnames(lane_1)), plate = c(rep(1, ncol(lane
 gene_dfs_twolane = do_all_plates(counts_4000 = lane_1, counts_2500 = lane_2, all_meta = twolane_meta, min.mean = 50, n.cores = 3)
 models_twolane = get_model_from_df_list(gene_dfs_twolane)
 
-
 anovas_twolane = get_anovas(gene_dfs_twolane)
 anova_ps_twolane = sapply(anovas_twolane, function(x) x$`Pr(>F)`[2])
 anova_frac_twolane = prop.table(table(p.adjust(anova_ps_twolane, method = "fdr")<0.05))[2]
-
-
-
 ```
 
-`r format(anova_frac*100, digits = 3)`% of considered genes show a significant model fit improvement with the swapping term (FDR-corrected $q<0.05$). 
-Of these genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the expected barcode swapping model.
+Of all tested genes, `r format(anova_frac*100, digits = 3)`% exhibited a significant improvement in the model fit with the swapping term (FDR-corrected $q<0.05$). 
+Of these significant genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the expected barcode swapping model.
 This strongly suggests that barcode swapping is more prevalent on the HiSeq 4000 compared to the HiSeq 2500, and that it affects nearly all tested genes.
 
-As a negative control, we also applied it to data where identical library pools were sequenced on two lanes of a HiSeq 2500. 
+As a negative control, we also fitted these models to data where identical library pools were sequenced on two lanes of a HiSeq 2500. 
 Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as expected.
 
 # Droplet-based analyses
