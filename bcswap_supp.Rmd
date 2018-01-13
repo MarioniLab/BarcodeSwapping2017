@@ -79,9 +79,11 @@ knitr::include_graphics(paste0(folder_location, "/figs/schematic.png"))
 This "swapping" of barcode labels (also called "hopping" or "switching") is problematic for analyses of sequencing data.
 Reads labelled with a barcode specific to a given sample may have originated from any other multiplexed sample in the same pool, compromising the interpretation of the sample labels and their use in downstream analyses.
 This phenomenon is particularly relevant for single-cell -omics assays, where a large number of samples (i.e., cells) are necessarily multiplexed together for efficient use of sequencing resources. 
+Our manuscript (_"Detection and removal of barcode swapping in single-cell RNA-seq data"_) quantifies the effect of barcode swapping in a variety of single-cell RNA-seq datasets.
+We also demonstrate some strategies to eliminate the effects of barcode swapping in droplet-based data.
 
-This file steps through the analysis for the manuscript *Detection and Removal of Barcode Swapping in Single-Cell RNA-seq data*.
-All code used is accessible by clicking on the `Code` buttons.
+This _Supplementary Materials_ file steps through all the analyses that were performed in the manuscript.
+All code chunks are accessible by clicking on the `Code` buttons below.
 
 # Definition of terms
 
@@ -237,7 +239,7 @@ Additionally the well with index $i=1,j=24$ was empty by design.
 -->
 
 
-```{r correlation, fig.cap="Linear relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode. Each point represents an impossible barcode combination, with data generated on the HiSeq 4000. The line of best fit is shown along with the coefficient of determination. Axes are shown on a log-scale for visibility."}
+```{r correlation, fig.cap="Relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode in the HiSeq 4000 data. Each point represents an impossible barcode combination. The line of best fit is shown along with the coefficient of determination."}
 # Melting the data frame purely to make casting it easier
 molten = melt( libs[libs$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
 # Casted to make easier to rowSums/colSums to get the contributions per barcode
@@ -363,7 +365,7 @@ Considering all mapped reads on the plate, there are `r format(totfrac.2500*100,
 We applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data.
 Results are shown in Figure \@ref(fig:model-2500)).
 
-```{r model-2500, fig.cap="Linear relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode, using data from the HiSeq 2500. The line of best fit is shown along with the coefficient of determination."}
+```{r model-2500, fig.cap="Relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode in the HiSeq 2500 data. The line of best fit is shown along with the coefficient of determination."}
 molten <- melt( libs_2500[libs_2500$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
 casted <- acast( molten , bc1~bc2 )
 nsums <- rowSums(casted, na.rm = TRUE)
@@ -1079,7 +1081,7 @@ $$S_{i,j,g}^{(t)} = \sum_{k=1}^{12} Y_{i,k,g}^{(t)}  + \sum_{l=1}^{8} Y_{l,j,g}^
 
 represent the total read count of gene $g$ in technology $t$ across all other cells on this plate sharing an index with $(i, j)$.
 
-We first consider a null model without swapping where, for cell $(i,j)$, the number of reads mapped to each gene $g$ in the HiSeq 4000 data set is only dependent on the number of reads mapped to the same cell in the HiSeq 2500 data. 
+We first consider a null model without swapping where, for cell $(i,j)$, the number of reads mapped to each gene $g$ in the HiSeq 4000 dataset is only dependent on the number of reads mapped to the same cell in the HiSeq 2500 data. 
 This means that
 
 $$H_{0}: Y_{i,j,g}^{4000} = \alpha_{g} Y_{i,j,g}^{2500} + \epsilon_{i,j,g}$$
