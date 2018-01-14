@@ -1104,7 +1104,7 @@ The use of least squares assumes a normal distribution for the errors, which is 
 
 For each gene, evidence against $H_{0}$ in favour of $H_{1}$ is established by performing an F-test (as the models are nested).
 The use of the swapping term significantly improves the model fit to the data when $H_{1}$ is favoured over $H_{0}$.
-In addition, we expect that $\beta > 0$, i.e., swapping moves reads from donor libraries to recipient libraries.
+In addition, we expect that $\beta > 0$, i.e., swapping transfers reads from donor libraries to recipient libraries.
 If $\beta < 0$, the behaviour of swapping is inverted compared to the other work presented above.
 
 When the model is applied, the vast majority of genes favour $H_{1}$ with $\beta>0$, as shown in Figure \@ref(fig:subset-highexpr)
@@ -1319,33 +1319,37 @@ Each run of the microfluidic system generates a sample that typically contains t
 These droplet-based protocols label their cells in a different manner to plate-based assays, as a cell barcode (unique to each droplet) is incorporated into the transcript alongside an additional Illumina barcode that labels different sets of cells (i.e., samples). 
 Therefore, swapping of Illumina barcodes will move transcripts between samples while retaining the same cell identifier (Figure \@ref(fig:tenx-bcs)).
 
-```{r tenx-bcs, fig.cap="10X barcode schematic. A 10X transcript contains multiple barcodes, including a 10X-supplied cell-labelling barcode, a randomly generated Unique Molecular Identifier (UMI), and an Illumina-supplied sample index. Only the sample index is expected to swap, leaving the cell barcode and UMI unchanged."}
-
+```{r tenx-bcs, echo=FALSE, fig.cap="Schematic of the barcoding strategy used in 10X Genomics experiments. Each captured cDNA contains multiple barcodes, including a 10X-supplied cell-labelling barcode, a randomly generated unique molecular identifier (UMI), and an Illumina-supplied sample index. Only the sample index is expected to swap, leaving the cell barcode and UMI unchanged."}
 knitr::include_graphics(paste0(folder_location, "/figs/10x_bcs.pdf"))
-
 ```
 
-As discussed in the main text, swapping can have two effects depending on whether the cell barcodes are shared between the donor and recipient libraries. 
-If they are shared, transcriptomes are homogenised. 
-If they are not, artefactual cells may appear.
+As discussed in the main text, swapping of the sample barcode can have two effects depending on whether the same cell barcodes are present in both the donor and recipient samples. 
+If they are, the expression profile for each shared cell barcode in the recipient sample will become a mixture with the corresponding profile in the donor sample. 
+Otherwise, artefactual cells may appear in the recipient sample, correspodning to the swapped-in cell barcodes from the donor sample.
+
+## Shared cell barcodes between multiplexed samples
+
+### Description of the null model
+
 Here, we investigate whether the barcode swapping phenomenon causes an excess of cell barcode sharing in droplet data.
+Assuming that cell barcodes are drawn at random for each sample, we can formulate a null model for the proportion of shared cell barcodes between two samples.
 
 We used data generated from the 10X Chromium system, where there are approximately 750,000 unique cell barcodes [@zheng_massively_2017]. 
-We find 737,280 columns in the raw matrix output of CellRanger, which we use as the total number of barcodes. 
-If we make the assumption that cell barcodes are drawn at random for each sample, this allows us to formulate a null model for the rate of sharing.
+We find 737,280 columns in the raw matrix output of CellRanger, which we use as the total number of cell barcodes $N$. 
+For samples 1 and 2, we have $n_1$ and $n_2$ cell barcodes, respectively, that have been called as cells. 
+Further denote the number of shared cell barcodes observed between samples 1 and 2 is $S$.
 
-We can test for deviations in the observed rate of sharing against the null using a hypergeometric test. This test uses the hypergeometric distribution, which describes the expeected number of "successes" for drawing without replacement. For our data, we apply sample pairwise testing, as particular samples may be more compromised by swapping than others.
+Under the null hypothesis (i.e., no barcode swapping between samples), cell barcodes are drawn independently in each sample.
+In this case, the number of shared cell barcodes between samples should follow a hypergeometric distribution.
+This is based on randomly drawing $n_2$ cell barcodes from the total set of $N$ cell barcodes without replacement.
+The number of successes is defined as the number of drawn cell barcodes that are also in the set of $n_1$ cell barcodes called in sample 1. 
 
-For samples 1 and 2, we have $n_1$ and $n_2$ barcodes, respectively, that have been called as cells. The 737,280 cell barcodes supplied by 10X is referred to as $N$. The number of shared barcodes observed between samples 1 and 2 is $S$.
-
-We consider the sampling of sample 2's $n_2$ barcodes as repeated draws from the total set of $N$ barcodes, of which the drawing of $n_1$ particular barcodes (those from sample 1) consitute a success.
-
-Under the null hypothesis, cell barcodes are drawn at random, and there is no increased incidence of barcode sharing. In this case, the number of shared barcodes between samples should follow a hypergeometric distribution. We test the observed $S$ against this distribution, i.e., how often would we expect to see a result as or more extreme ($\geq S$) given random drawing of barcodes from the pool? 
+We use this distribution to compute a $p$-value for the observed $S$, i.e., how often would we expect to see a result as or more extreme ($\geq S$) given random drawing of cell barcodes from the pool? 
+This is repeated for every pair of samples to examine all possible swapping relationships.
 
 ```{r 10x-functions}
-
-#thanks to Karsten Bach for code
 # Computation of p-values based on hypergeometric test
+# Thanks to Karsten Bach for code
 compare <- function(barcodes, samples) {
     out <- NULL
     samp_names = unique(samples)
@@ -1376,7 +1380,6 @@ compare <- function(barcodes, samples) {
     out$s2 = samp_names[as.numeric(as.character(out$s2))]
     return(out)
 }
-
 ```
 
 <!-- Notably, the sample indexes provided by 10X to label individual runs of the machine are actually a mixture of four different indices. Therefore it is possible for a barcode swap to occur between indices within the same sample (Figure \@ref(fig:tenx-swap)); this will not be detectable after processing as all transcripts of the same *sample* are considered together, independent of which particular barcode from that sample was used. This makes this system inconvenient for estimating swapping rates. Instead, our analysis here focusses on the *consequences* of swapping in droplet data. -->
@@ -1388,101 +1391,81 @@ compare <- function(barcodes, samples) {
 
 <!-- ``` -->
 
-## Cell barcode sharing on the HiSeq 2500
-
-### Dataset 1
+### Dataset 1 on the HiSeq 2500
 
 ```{r load-2500-drop}
-
-drop_2500 = read.table(paste0(folder_location, "/data/tenx_2500_1.tab"), stringsAsFactors = FALSE)
-split = strsplit(drop_2500[,1], "-")
-barcodes = sapply(split, function(x) x[1])
-samples = sapply(split, function(x) x[2])
-
+drop_2500 <- read.table(paste0(folder_location, "/data/tenx_2500_1.tab"), stringsAsFactors = FALSE)
+split <- strsplit(drop_2500[,1], "-")
+barcodes <- sapply(split, function(x) x[1])
+samples <- sapply(split, function(x) x[2])
 ```
 
-Droplet data was generated from mouse embryonic cells using the 10X Genomics Chromium system. 
-Samples were sequenced on lanes of a HiSeq 2500. 
+Here, droplet data was generated from mouse embryonic cells using the 10X Genomics Chromium system and sequenced using a HiSeq 2500 machine. 
 `r length(unique(samples))` samples were multiplexed, varying in size between `r as.numeric(max(table(samples)))` and `r as.numeric(min(table(samples)))` called cells. 
 CellRanger 1.3.1 was used for sample processing with default arguments. 
 Figure \@ref(fig:2500-pairwise) shows p-values from the hypergeometric tests between every pair of samples.
 
-
-```{r 2500-pairwise, fig.cap="HiSeq 2500 sharing p-values. Hypergeometric test p-values between samples are shown for the HiSeq 2500, embryonic cell dataset."}
-
+```{r 2500-pairwise, fig.cap="Histogram of p-values for cell barcode sharing between all pairs of 10X samples in dataset 1, sequenced on the HiSeq 2500."}
 # good_comp = pairwise_comparisons(barcodes = barcodes, samples = samples, n.cores = 3)
-good_comp = compare(barcodes, samples)
+good_comp <- compare(barcodes, samples)
 hist(good_comp$p, xlab = "p", main = "HiSeq 2500, embryonic cells", col = "darkgrey")
 
-if(any(p.adjust(good_comp$p, method = "fdr")!=1))
+if(any(p.adjust(good_comp$p, method = "fdr")!=1)) {
   print("There are non-1 adjusted p-values")
-
-
-
+}
 ```
 
-
-None of the p-values for any comparison is significant after FDR correction at any significance level (all adjusted p-values equal to 1). 
-The high density of $p=1$ values arise when two samples share no barcodes. 
+None of the p-values for any comparison were significant after FDR correction at any significance level (all adjusted p-values equal to 1). 
+This is due to the fact that no cell barcodes are shared between samples in this dataset. 
 Thus, we do not observe any excess of sharing in this data, consistent with the low swapping rate on the HiSeq 2500.
 
-### Dataset 2
+### Dataset 2 on the HiSeq 2500
 
 ```{r load-d2}
-
-samp2_2500 = read.table(paste0(folder_location, "/data/tenx_2500_2.tab"), header = TRUE)
-
-result = compare(samp2_2500$barcode[!grepl("B", samp2_2500$SampleID)], samp2_2500$SampleID[!grepl("B", samp2_2500$SampleID)])
-
+samp2_2500 <- read.table(paste0(folder_location, "/data/tenx_2500_2.tab"), header = TRUE)
+result <- compare(samp2_2500$barcode[!grepl("B", samp2_2500$SampleID)], samp2_2500$SampleID[!grepl("B", samp2_2500$SampleID)])
 ```
 
-We repeat our analysis on another dataset involving mouse epithelial cells, processed using the 10X Chromium system and sequenced on a HiSeq 2500.
+We repeated our analysis on another dataset involving mouse epithelial cells, processed using the 10X Chromium system and sequenced on a HiSeq 2500.
 CellRanger 1.2.1 was used for data processing with default arguments. 
 The six samples range in size between `r as.numeric(max(table(samp2_2500$SampleID)))` and `r as.numeric(min(table(samp2_2500$SampleID)))` called cells. 
 Two samples were excluded from analysis here due to failed library preparation.
-Only `r sum(result$shared)` barcodes were shared between samples, so p-values are almost universally 1, as shown in Figure \@ref(fig:good-plot).
+Only `r sum(result$shared)` cell barcodes were shared between samples, so p-values are almost universally 1 (Figure \@ref(fig:good-plot)).
 
-```{r good-plot, fig.cap="HiSeq 2500 sharing p-values. Hypergeometric test p-values between samples are shown for the HiSeq 2500, mouse epithelial cell dataset."}
-
+```{r good-plot, fig.cap="Histogram of p-values for cell barcode sharing between all pairs of 10X samples in dataset 2, sequenced on the HiSeq 2500."}
 hist(result$p, main = "HiSeq 2500, mouse epithelial cells", xlab = "p-value", breaks = 20, xlim = c(0,1), col = "darkgrey")
-
-
 ```
 
-## Cell barcode sharing on the HiSeq 4000
-
-### Dataset 2
+### Dataset 2 on the HiSeq 4000
 
 ```{r bad-data}
+samp2_all <- read.table(paste0(folder_location, "/data/tenx_4000_2.csv"), stringsAsFactors = FALSE, sep = ",", header = TRUE)
+samp2_all$barcode <- sapply(strsplit(samp2_all$barcode,"-"), function(x) x[1])
+samp2_all$quantile <- NA
 
-samp2_all = read.table(paste0(folder_location, "/data/tenx_4000_2.csv"), stringsAsFactors = FALSE, sep = ",", header = T)
-samp2_all$barcode = sapply(strsplit(samp2_all$barcode,"-"), function(x) x[1])
-samp2_all$quantile = NA
 for(i in 1:nrow(samp2_all)){
-  samp = samp2_all$SampleID[i]
-  rem = samp2_all[-i,]
-  umis = rem$UmiSums[which(rem$SampleID == samp)]
-  samp2_all$quantile[i] = sum(umis<samp2_all$UmiSums[i])/length(umis)
+  samp <- samp2_all$SampleID[i]
+  rem <- samp2_all[-i,]
+  umis <- rem$UmiSums[which(rem$SampleID == samp)]
+  samp2_all$quantile[i] <- sum(umis<samp2_all$UmiSums[i])/length(umis)
 }
 
-samp2 = samp2_all[!samp2_all$SampleID%in%c("B1", "B2"),]
-
-bad_comp = compare(samp2$barcode, as.numeric(factor(samp2$SampleID)))
-
+samp2 <- samp2_all[!samp2_all$SampleID%in%c("B1", "B2"),]
+bad_comp <- compare(samp2$barcode, as.numeric(factor(samp2$SampleID)))
 ```
 
 The same mouse epithelial cell dataset (Dataset 2, above) was also sequenced on HiSeq 4000. 
 In this data, the six samples range in size between `r as.numeric(max(table(samp2$SampleID)))` and `r as.numeric(min(table(samp2$SampleID)))` called cells. 
 Two samples were again excluded from analysis here due to failed library preparation. 
-Here we observe low p-values in all pairwise comparisons (Figure \@ref(fig:bad-plot)), consistent with swapping on the HiSeq 4000.
+Here we observe low p-values in all pairwise comparisons (Figure \@ref(fig:bad-plot)), consistent with increased barcode swapping on the HiSeq 4000.
 
-```{r bad-plot, fig.cap = "HiSeq 4000 sharing p-values. Hypergeometric test p-values between samples are shown for the HiSeq 4000, mouse epithelial cell dataset. Note the x-axis scale, which differs from the other histograms."}
-
+```{r bad-plot, fig.cap = "Histogram of p-values for cell barcode sharing between all pairs of 10X samples in dataset 2, sequenced on the HiSeq 4000. Note that the x-axis scale differs from the previous histograms."}
 hist(bad_comp$p, xlab = "p", xlim =c(0,0.01), breaks = 10, main = "HiSeq 4000, mouse epithelial cells", col = "darkgrey")
-
 ```
 
-Despite this, the absolute rate of barcode sharing is still low: of `r nrow(samp2)` barcodes, only `r sum(table(samp2$barcode)>1)` barcodes occur more than once
+Despite this, the absolute rate of cell barcode sharing is still low.
+Of `r nrow(samp2)` barcodes, only `r sum(table(samp2$barcode)>1)` cell barcodes occur more than once across all samples in this dataset.
+
 <!-- - see the table below: -->
 
 <!-- ```{r bad-table} -->
@@ -1496,54 +1479,42 @@ Despite this, the absolute rate of barcode sharing is still low: of `r nrow(samp
 <!-- fracs = c(get_fraction(samp2$barcode), get_fraction(samp3$barcode), get_fraction(barcodes)) -->
 <!-- ``` -->
 
-### Dataset 3
+### Dataset 3 on the HiSeq 4000
 
 ```{r load-d3}
-
-samp3 = read.table(paste0(folder_location, "/data/tenx_4000_3.tab"), header = T)
-samp3_comp = compare(samp3$barcode, samp3$sample)
-
-sig_row = which.min(samp3_comp$p)
-
+samp3 <- read.table(paste0(folder_location, "/data/tenx_4000_3.tab"), header = TRUE)
+samp3_comp <- compare(samp3$barcode, samp3$sample)
+sig_row <- which.min(samp3_comp$p)
 ```
 
 This dataset contains four samples of human xenograft cells, generated using the 10X Genomics Chromium system.
 Libraries were sequenced on a HiSeq 4000, and data was processed using CellRanger 1.3.1 using default arguments.
 Samples varied in size between `r as.numeric(max(table(samp3$sample)))` and `r as.numeric(min(table(samp3$sample)))` called cells. 
-
-Of the `r nrow(samp3)` barcodes, `r as.numeric(table(table(samp3$barcode))[2])` barcodes were observed twice, with none observed three times or more. 
-Our pairwise comparison method identifies one significant excess of sharing after FDR correction (adjusted p-value of `r format(min(p.adjust(samp3_comp$p, method = "fdr")), digits = 3)`). 
-Here, `r samp3_comp$shared[sig_row]` barcodes were shared compared to an expected value of `r format(mean(rhyper(100000, m = samp3_comp$n1[sig_row], k = samp3_comp$n2[sig_row], n= 750000)), digits = 3)` for samples of size `r samp3_comp$n1[sig_row]` and `r samp3_comp$n2[sig_row]`. 
+Of the `r nrow(samp3)` cell barcodes, `r as.numeric(table(table(samp3$barcode))[2])` were observed twice, with none observed three times or more. 
 
 Figure \@ref(fig:plot-d3) shows p-values from the hypergeometric tests between every pair of samples.
+One pairwise comparison contains a significant excess of sharing after FDR correction (adjusted p-value of `r format(min(p.adjust(samp3_comp$p, method = "fdr")), digits = 3)`). 
+In this comparison, `r samp3_comp$shared[sig_row]` cell barcodes were shared compared to an expected value of `r format(mean(rhyper(100000, m = samp3_comp$n1[sig_row], k = samp3_comp$n2[sig_row], n= 750000)), digits = 3)` for samples of size `r samp3_comp$n1[sig_row]` and `r samp3_comp$n2[sig_row]`. 
 
-```{r plot-d3, fig.cap = "HiSeq 4000 sharing p-values. Hypergeometric test p-values between samples are shown for the HiSeq 4000, xenograft cell dataset."}
-
+```{r plot-d3, fig.cap = "Histogram of p-values for cell barcode sharing between all pairs of 10X samples in dataset 3, sequenced on the HiSeq 4000."}
 hist(samp3_comp$p, main = "HiSeq 4000, xenograft cells", xlab = "p-value", breaks = 20, col = "darkgrey")
-
-
-
 ```
 
-In both HiSeq 4000 datasets, we observe excess barcode sharing between samples. 
+In both HiSeq 4000 datasets, we observe excess sharing of cell barcodes between samples. 
 However, the actual number of shared cell barcodes remains low. 
-We hypothesise that, due to the low rate of barcode swapping, swapped-in cell libraries (the potentially artefactual libraries) are very small compared to the libraries of real cells. 
-Because the libraries are small, they are typically ignored by cell-calling algorithms that distinguish cell-containing and empty droplets.
-Such algorithms often depend on library sizes of individual cell barcode libraries, meaning that small libraries generated by swapping will be discarded.
+We hypothesise that, due to the low rate of barcode swapping, swapped-in cell libraries (i.e., the potentially artefactual libraries) in the recipient samples are very small compared to the libraries of real cells. 
+As a result, the swapped-in libraries are mostly discarded by cell-calling algorithms that distinguish cell-containing and empty droplets based on their library sizes.
 This suggests that droplet data has an intrinsic robustness to the generation of artefactual cells, at least when samples are of high quality and contain cells of comparable size.
 
-##Barcode swapping can create "shadow-cells" in compromised samples
+## Artefactual cells due to barcode swapping in compromised samples
 
-Here, we describe an experiment where barcode-swapping induced severe technical artefacts which may confound analysis.
-
-In the second droplet dataset above (mouse epithelial cells), the sample labels combine experimental condition (A-D) with biological replicate number (1-2). 
+Here, we describe an experiment where barcode-swapping created severe technical artefacts that confounded downstream analysis.
+In dataset 2 (mouse epithelial cells), the sample labels combine experimental condition (A-D) with biological replicate number (1-2). 
 Samples B1 and B2 possess considerably smaller library sizes (Figure \@ref(fig:lib-size)), and share almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
 Accordingly, samples B1 and B2 were excluded from the earlier analyses (Figure \@ref(fig:bad-plot)).
 
-```{r lib-size, fig.cap = "Sample library sizes. Samples B1 and B2 have considerably smaller library sizes than other samples."}
-
-bc_tab = table(samp2_all$barcode)
-
+```{r lib-size, fig.cap = "Distribution of library sizes (i.e., the total number of UMIs assigned to each cell barcode) across all cell barcodes in each 10X sample. Only cell barcodes that were detected by CellRanger as cell-containing droplets are shown."}
+bc_tab <- table(samp2_all$barcode)
 
 ggplot(samp2_all, aes(x = factor(SampleID), y = UmiSums, fill = substr(SampleID, 1, 1))) +
   geom_violin() +
@@ -1554,21 +1525,16 @@ ggplot(samp2_all, aes(x = factor(SampleID), y = UmiSums, fill = substr(SampleID,
   labs(x = "", y = "Library size") +
   scale_fill_brewer(palette = "Set2")
 
-samp2_all$n = sapply(samp2_all$barcode, function(x) bc_tab[x])
-samp2_all$n_cut =  samp2_all$n>1 +1
+samp2_all$n <- sapply(samp2_all$barcode, function(x) bc_tab[x])
+samp2_all$n_cut <-  samp2_all$n>1 +1
 
-b1_barcodes = samp2_all$barcode[samp2_all$SampleID =="B1"]
-b2_barcodes = samp2_all$barcode[samp2_all$SampleID =="B2"]
+b1_barcodes <- samp2_all$barcode[samp2_all$SampleID =="B1"]
+b2_barcodes <- samp2_all$barcode[samp2_all$SampleID =="B2"]
 
-samp2_all$in_b = samp2_all$barcode %in% b1_barcodes & samp2_all$barcode %in% b2_barcodes
-
-
-
+samp2_all$in_b <- samp2_all$barcode %in% b1_barcodes & samp2_all$barcode %in% b2_barcodes
 ```
 
-```{r sharing, fig.cap = "Barcode sharing between samples. Samples B1 and B2 share most of their barcodes, and many barcodes observed in other samples are also observed in samples B1 and B2."}
-
-
+```{r sharing, fig.cap = "Number of cell barcodes in each sample that are also present in both samples B1 and B2. The number of cell barcodes in each sample that are not present in both B1 and B2 is also shown."}
 ggplot(samp2_all, aes(x = SampleID)) +
   geom_bar(aes(fill = factor(in_b)), stat = "count") +
 scale_fill_manual(values = c("#E8CF76", "#383F70"), name = "", labels = c("Barcode not present\nin both B samples", "Barcode present\nin both B samples")) +  
@@ -1581,36 +1547,27 @@ scale_fill_manual(values = c("#E8CF76", "#383F70"), name = "", labels = c("Barco
   labs(x = "Sample", y = "Number of called cells") +
   scale_y_continuous(breaks = seq(0, 1250, 250), labels = c("0", "250", "500", "750", "1,000", "1,250"))
 
-
-
-sample_share = length(intersect(samp2_all$barcode[samp2_all$SampleID=="B1"],
+sample_share <- length(intersect(samp2_all$barcode[samp2_all$SampleID=="B1"],
                                 samp2_all$barcode[samp2_all$SampleID=="B2"]))/
                length(union(samp2_all$barcode[samp2_all$SampleID=="B1"],
                             samp2_all$barcode[samp2_all$SampleID=="B2"]))
 
-
-
-fail_bc = samp2_all[grepl("B", samp2_all$SampleID), "barcode"]
-
-samp2$swapped_in = samp2$barcode%in%fail_bc
-
-test = wilcox.test(samp2$UmiSums[samp2$swapped_in], samp2$UmiSums[!samp2$swapped_in])
-
-
+fail_bc <- samp2_all[grepl("B", samp2_all$SampleID), "barcode"]
+samp2$swapped_in <- samp2$barcode%in%fail_bc
+test <- wilcox.test(samp2$UmiSums[samp2$swapped_in], samp2$UmiSums[!samp2$swapped_in])
 ```
 
-Samples B1 and B2 share `r format(sample_share*100, digits = 3)`% of all their cell barcodes with each other, and yet apparently contain more cells than any of the other samples. 
+Samples B1 and B2 share `r format(sample_share*100, digits = 3)`% of all their cell barcodes with each other, yet apparently contain more cells than any of the other samples. 
 This behaviour is clearly unusual.
-We hypothesize that the cells in samples B1 and B2 were damaged either prior to or during library preparation in the 10X Chromium system, resulting in the loss of cytoplasmic RNA.
-This has resulted in the very small library sizes observed for cells in these samples, as the actual amount of input RNA in each droplet was very low. 
-Because the real cell libraries in the B samples were very small, barcode swapping from other samples generated artefactual libraries that were large relative to the real cells in the B samples.
-These swapped libraries were subsequently considered to be cells by the cell-calling algorithm, despite being derived purely from other samples. 
+We hypothesize that the cells in samples B1 and B2 were damaged prior to or during library preparation in the 10X Chromium system, resulting in the loss of cytoplasmic RNA.
+This resulted in the very small library sizes observed for cells in these samples, as the actual amount of input RNA in each droplet was very low. 
+Because the real cell libraries in the B samples were very small, barcode swapping from other samples generated artefactual libraries that were large relative to the real cells.
+These swapped libraries were subsequently called as cells by the CellRanger software, despite being derived purely from other samples. 
 This is supported by the excessive sharing of barcodes between the two B samples.
 
 Why have these small libraries been called as cells? 
-This is due to CellRanger's algorithm, which calls cells by "selecting 10X barcodes with a total UMI count of >= 10% of the 99th percentile of the expected recovered cells". 
-If the 99th percentile is low, many barcodes with low library sizes will be called as cells.
-This means that CellRanger calls cells regardless of whether libraries are noisy, of poor quality, or derived from swapping.
+This is due to CellRanger's cell calling algorithm, which defines cells as "10X barcodes with a total UMI count of >= 10% of the 99th percentile of the expected recovered cells" [@zheng_massively_2017]. 
+If the 99th percentile is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping.
 
 Finally, not all barcodes from high-quality samples are observed in the poor quality B samples. 
 What may drive a barcode's presence or absence? 
@@ -1622,10 +1579,7 @@ Based on this reasoning, barcodes from high-quality samples that are also called
 Indeed, Figure \@ref(fig:smoking-gun) demonstrates that shared-barcode libraries do have significantly more molecules (p = `r format(test$p.value, digits = 3)`, with a ratio of `r format(median(samp2$UmiSums[samp2$swapped_in])/median(samp2$UmiSums[!samp2$swapped_in]), digits = 3)` between the medians).
 This confirms that the cells called in B are largely derived from swapping artefacts. 
 
-```{r smoking-gun, fig.cap = "Library sizes of shared and unshared cell barcodes, from high-quality samples. Cells that have their barcode shared between a high quality and poor quality sample (\"Shared cell barcode\") are larger than those that do not (\"Unique cell barcode\"). This suggests that larger cells have swapped into the poor quality samples on account of their larger size - they can contribute larger absolute amounts of RNA."}
-
-
-
+```{r smoking-gun, fig.cap = "Library sizes of cell barcodes in high-quality samples that are shared with B1/B2 (\"Shared cell barcode\") or not (\"Unique cell barcode\"). Dots represent cell barcodes that are more than 1.5 interquartile ranges from the edges of each box."}
 ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   geom_boxplot() +
   theme_bw() +
@@ -1633,10 +1587,6 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   scale_x_discrete(labels = c("Unique cell\nbarcode", "Shared cell\nbarcode"), name = "") +
   geom_signif(comparisons = list(c(1, 2)), annotations = "***") +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
-
-
-
-
 ```
 
 <!-- We have shown that barcode swapping can create severe data artefacts in experimentally compromised samples. **We recommend that a test for the degree of cell barcode sharing between multiplexed droplet-based scRNA-seq samples should be carried out as a standard part of quality control for this type of data.** -->
@@ -1649,14 +1599,14 @@ We advise caution when combining experimental designs of this nature with HiSeq 
 
 ## Cell exclusion
 
-We recommend using a test for the degree of barcode sharing between samples as a standard part of droplet-based single-cell sequencing quality control. 
+We recommend testing for the degree of cell barcode sharing between samples as a standard quality control step in droplet-based single-cell experiments.
 The method we have presented above (a hypergeometric test on pairwise comparisons) is quick and easy to apply.
 
-If problems with barcode swapping are observed, the easiest approach to remove the effects is to **remove any cells labelled with a barcode that exists in more than one sample in each multiplexed sequencing run**. 
-This procedure will remove the artefacts, regardless of whether the cells truly exist in both samples (which will cause transcriptome mixing) or whether artefactual "fake cells" are being created.
-The cost of such a procedure will be the loss of cells for downstream analysis, even in the absence of swapping. 
+If problems with barcode swapping are observed, the easiest solution is to **remove any cells labelled with a barcode that exists in more than one sample in each multiplexed sequencing run**. 
+This procedure will remove the artefacts, regardless of whether the cells truly exist in both samples (which will cause transcriptome mixing) or whether artefactual cells are being created.
+The cost of such a procedure will be the loss of some genuine cells for downstream analysis, even in the absence of swapping. 
 
-We have run simulations to understand the effects of excluding cell barcodes on scRNA-seq data.
+We have run simulations to understand the effects of excluding cell barcodes in the absence of swapping.
 We consider a simulated experiment where 8 samples are multiplexed together. 
 Each sample consists of an equal number of cells $n$, whose barcodes are drawn at random without replacement from 10X's set of 737,280. 
 Drawing of barcodes is independent between samples, assuming no creation of artefactual cells due to swapping.
@@ -1664,33 +1614,25 @@ Barcodes are then marked for exclusion if they are observed in more than one of 
 For each $n$, 100,000 simulations were run. 
 
 Figure \@ref(fig:sim-removals) shows the rate of cell removal for different values of $n$.
-The expected rate of removal is low (< 5%) at low $n$ corresponding to conventionally sized experiment (< 4,000 cells per sample).
+The expected rate of removal is low (< 5%) at low $n$ corresponding to a conventionally sized experiment (< 4,000 cells per sample).
 In such cases, cell exclusion is a simple and effective strategy for removing swapping artifacts without discarding much data.
 However, it is not suitable for datasets with many ($n > 10000$) cells per sample, where the expected rate of removal exceeds 10%.
 Similarly, it should not be used in cases where many samples are multiplexed for sequencing.
 
-```{r sim-removals, fig.cap = "Removal rate for experiments of different sizes. If duplicate cell barcodes are removed, there is a loss of power via cell exclusion. Plotted is the expected rate of removal for experiments of different sizes: 8 multiplexed samples, each of the size given on the x-axis are considered. These estimates assume no swapping."}
-
-do_sim_remove = function(sample_size = 10000, n.samples = 8, n.barcodes = 737280){
-  samples = sapply(1:n.samples, function(x) sample(x = n.barcodes, size = sample_size, replace = FALSE))
-  
-  dups = samples[base::duplicated(as.numeric(samples))]
-  
-  removal_rate = sum(samples%in%dups)/length(samples)
-  
+```{r sim-removals, fig.cap = "Percentage of cell barcodes that are incorrectly discarded by our cell exclusion approach in the absence of barcode swapping. This is based on simulated data for an experiment containing 8 multiplexed 10X samples with varying numbers of cells."}
+do_sim_remove <- function(sample_size = 10000, n.samples = 8, n.barcodes = 737280){
+  samples <- sapply(1:n.samples, function(x) sample(x = n.barcodes, size = sample_size, replace = FALSE))
+  dups <- samples[base::duplicated(as.numeric(samples))]
+  removal_rate <- sum(samples%in%dups)/length(samples)
   return(removal_rate)
-  
 }
 
+sizes <- c(1000, 2000, 4000, 8000, 12000, 24000)
+nsim <- 100
 
-sizes = c(1000, 2000, 4000, 8000, 12000, 24000)
-nsim = 100
-
-sim_results = lapply(sizes, function(x) sapply(1:nsim, function(y) do_sim_remove(sample_size = x, n.samples = 8)))
-
-size_column = factor(rep(sizes, nsim), levels = sizes, ordered = TRUE)
-
-plot_df = data.frame(rate = unlist(sim_results),
+sim_results <- lapply(sizes, function(x) sapply(1:nsim, function(y) do_sim_remove(sample_size = x, n.samples = 8)))
+size_column <- factor(rep(sizes, nsim), levels = sizes, ordered = TRUE)
+plot_df <- data.frame(rate = unlist(sim_results),
                      size = size_column[order(size_column)])
 
 ggplot(plot_df, mapping = aes(x = size, y = rate)) +
@@ -1698,10 +1640,11 @@ ggplot(plot_df, mapping = aes(x = size, y = rate)) +
   labs(x= "Cells per sample", y = "Removal rate") +
   theme_bw() +
   scale_y_continuous(breaks = seq(0, 0.2, 0.05), labels = paste0(seq(0, 20, 5), "%"))
-
 ```
 
 ## Molecule exclusion
+
+### Background
 
 A more precise solution for removing swapping effects focuses on the cDNA molecules themselves.
 In a 10X Genomics single-cell experiment, transcripts are generated that contain:
@@ -1709,26 +1652,24 @@ In a 10X Genomics single-cell experiment, transcripts are generated that contain
 * An Illumina sample barcode
 * A cell barcode, drawn from a pool of ~737,280
 * A unique molecular identifier (UMI): a 10 bp random sequence, providing `r format(4^10, scientific = FALSE, big.mark = ",")` combinations
-* Gene sequence from the captured mRNA.
+* Gene sequence from the captured mRNA
 
-The chance of observing a read in two different samples with the combination of same cell barcode, UMI, and gene alignment is therefore extremely low, due to the large amount of combinatorial complexity.
+The chance of observing a read in two different samples with the combination of same cell barcode, UMI, and gene alignment is extremely low, due to the large amount of combinatorial complexity.
 We therefore assume that all reads with the same combination are derived from a single original molecule.
 
-We first considered the mouse epithelial cells sequenced on HiSeq 4000 (i.e., dataset 2). 
+We first considered the mouse epithelial cells sequenced on the HiSeq 4000 (i.e., dataset 2). 
 We identified reads with the same combination of UMI, cell barcode and gene across all samples. 
-For each combination, we calculated the fraction of all reads that were observed in each sample. 
-Figure \@ref(fig:read-frac-density) shows the largest read fraction for each combination, excluding those combinations that only contain reads in one sample.
+For each combination, we calculated the fraction of all reads that were observed in each sample, and obtained the largest read fraction across all samples.
+Figure \@ref(fig:read-frac-density) shows the distribution of largest read fractions for all combinations that contain reads in multiple samples.
 
-```{r read-frac-density, fig.cap="Density of the largest read fraction for swapped molecules. The read fraction is the fraction of all reads for a molecule (cell barcode, UMI, aligned gene identical) that were observed in each sample. The largest fraction is simply the fraction in the sample that contained the most reads for each molecule. Only molecules that were observed in more than one sample are shown."}
+```{r read-frac-density, fig.cap="Distribution of the largest read fractions for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000."}
+h5_files <- dir(paste0(folder_location, "/data/molecule_info/hiseq_4000"), full.names = TRUE)
 
-h5_files = dir(paste0(folder_location, "/data/molecule_info/hiseq_4000"), full.names = TRUE)
+cleaned_4000 <- swappedDrops(h5_files, get.diagnostics = TRUE, get.swapped = TRUE)
+reads_4000 <- cleaned_4000$diagnostics
 
-cleaned_4000 = swappedDrops(h5_files, get.diagnostics = TRUE, get.swapped = TRUE)
-reads_4000 = cleaned_4000$diagnostics
-
-large_frac = apply(reads_4000, 1, max)/Matrix::rowSums(reads_4000)
-large_frac = large_frac[large_frac!=1]
-
+large_frac <- apply(reads_4000, 1, max)/Matrix::rowSums(reads_4000)
+large_frac <- large_frac[large_frac!=1]
 
 ggplot(mapping = aes(x = large_frac)) +
   geom_density() +
@@ -1740,42 +1681,31 @@ ggplot(mapping = aes(x = large_frac)) +
              nudge_x = 0.0) +
   theme_bw() +
   labs(x = "Largest read fraction", y = "Density")
-
-
 ```
 
-The periodic spikes in density at particular values are driven by discreteness of count data. 
+The periodic spikes in density at particular values are driven by the discreteness of count data. 
 Three of these are annotated - a largest read fraction of 0.5 may indicate molecules with one read in each of two samples; a value of 0.66 indicates molecules with two reads in one sample, and one in another, and so on.
 The greatest density is observed at values close to 1. 
 This represents combinations where the vast majority of reads are allocated to a single sample, presumably the sample of origin.
-(Remember that, regardless of the number of reads, each combination only contributes a single UMI count to a sample.)
 
 We can visualize the high density at large values with a cumulative distribution function (Figure \@ref(fig:read-frac-ecdf)).
+Over 80% of swapped molecules have a largest read fraction of above 0.8, and over 60% above 0.9.
 
-```{r read-frac-ecdf, fig.cap="Cumulative distribution of the largest read fraction for swapped molecules. The read fraction is the fraction of all reads for a molecule (cell barcode, UMI, aligned gene identical) that were observed in each sample. The largest fraction is simply the fraction in the sample that contained the most reads for each molecule. Only molecules that were observed in more than one sample are shown."}
-
+```{r read-frac-ecdf, fig.cap="Cumulative distribution of the largest read fraction for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000."}
 ggplot(mapping = aes(x = large_frac)) +
   stat_ecdf() +
   theme_bw() +
   labs(x = "Largest read fraction", y = "Cumulative distribution")
-
-
 ```
 
-Over 80% of swapped molecules have a largest read fraction of above 0.8, and over 60% above 0.9.
 
 As a negative control, the same libraries were re-sequenced on HiSeq 2500. 
-Figures \@ref(fig:read-frac-density-2500) and \@ref(fig:read-frac-ecdf-2500) overlay the HiSeq 2500 data over the HiSeq 4000 data.
-The density near 1 is greater for the HiSeq 2500, consistent with a reduced level of swapping.
 Table \@ref(tab:table-compare) presents summary values for the two sets of data.
 
 ```{r table-compare}
-
 h5_files_2500 = dir(paste0(folder_location, "/data/molecule_info/hiseq_2500"), full.names = TRUE)
-
 cleaned_2500 = swappedDrops(h5_files_2500, get.diagnostics = TRUE, get.swapped = TRUE)
 reads_2500 = cleaned_2500$diagnostics
-
 tab = data.frame(row.names = c("Hiseq4000", "HiSeq2500"), 
                  Reads = format(c(sum(reads_4000), sum(reads_2500)), big.mark = ","),
                  Molecules = format(c(nrow(reads_4000), nrow(reads_2500)), big.mark = ","),
@@ -1784,38 +1714,32 @@ tab = data.frame(row.names = c("Hiseq4000", "HiSeq2500"),
                                              digits = 3))
 
 kable(tab, caption = "Library summary statistics. Swapped fraction is the fraction of molecules (identical UMI, cell barcode, aligned gene) observed in more than one sample.", col.names = c("Reads", "Molecules", "Swapped fraction"))
-
-
 ```
 
-```{r read-frac-density-2500, fig.cap="Density of the largest read fraction for swapped molecules. HiSeq 2500 is shown in red, HiSeq 4000 in black. The read fraction is the fraction of all reads for a molecule (cell barcode, UMI, aligned gene identical) that were observed in each sample. The largest fraction is simply the fraction in the sample that contained the most reads for each molecule. Only molecules that were observed in more than one sample are shown."}
+Figures \@ref(fig:read-frac-density-2500) and \@ref(fig:read-frac-ecdf-2500) overlay the HiSeq 2500 data over the HiSeq 4000 data.
+The density near 1 is greater for the HiSeq 2500, consistent with a reduced level of swapping.
 
-
-large_frac_2500 = apply(reads_2500, 1, max)/Matrix::rowSums(reads_2500)
-large_frac_2500 = large_frac_2500[large_frac_2500!=1]
+```{r read-frac-density-2500, fig.cap="Distribution of the largest read fractions for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000 (black) or HiSeq 2500 (red)."}
+large_frac_2500 <- apply(reads_2500, 1, max)/Matrix::rowSums(reads_2500)
+large_frac_2500 <- large_frac_2500[large_frac_2500!=1]
 
 ggplot() +
   geom_density(mapping = aes(x = large_frac), col = "black") +
   geom_density(mapping = aes(x = large_frac_2500), col = "red") +
   theme_bw() +
   labs(x = "Largest read fraction", y = "Density")
-
-
 ```
 
-
-```{r read-frac-ecdf-2500, fig.cap="Cumulative distribution of the largest read fraction for swapped molecules. HiSeq 2500 is shown in red, HiSeq 4000 in black. The read fraction is the fraction of all reads for a molecule (cell barcode, UMI, aligned gene identical) that were observed in each sample. The largest fraction is simply the fraction in the sample that contained the most reads for each molecule. Only molecules that were observed in more than one sample are shown."}
-
+```{r read-frac-ecdf-2500, fig.cap="Cumulative distribution of the largest read fraction for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000 (black) or HiSeq 2500 (red)."
 ggplot() +
   stat_ecdf(mapping = aes(x = large_frac), col = "black") +
   stat_ecdf(mapping = aes(x = large_frac_2500), col = "red") +
   theme_bw() +
   labs(x = "Largest read fraction", y = "Cumulative distribution")
-
-
 ```
 
-<br> 
+### Description of the method
+
 We have implemented an algorithm to exclude molecules that were swapped between single-cell 10X Genomics libraries in the `DropletUtils` package, currently available on [GitHub](https://github.com/MarioniLab/DropletUtils).
 We use the following steps:
 
@@ -1827,40 +1751,31 @@ Thus, we exclude this combination from the UMI count in all samples other than t
 we cannot reliably identify the sample of origin.
 We therefore remove the combination from the UMI count in all samples.
 
-After running the method, we exclude `r format( ( 1 - sum(sapply(cleaned_4000$cleaned, sum))/nrow(reads_4000) ) * 100, digits = 3)`% of molecules in the HiSeq 4000 data.
+Using this method, we excluded `r format( ( 1 - sum(sapply(cleaned_4000$cleaned, sum))/nrow(reads_4000) ) * 100, digits = 3)`% of molecules in the HiSeq 4000 data.
 
-To test the effect of molecule exclusion on the data, we call cells from the processed and raw count matrices. 
-If we are successfully removing swapping from the data, we should remove the artefactual cells that we identified in Samples B1 and B2 above (see section 4.4, **Barcode swapping can create "shadow-cells" in compromised samples**). 
-We call cells using the `emptyDrops` function from the `r Githubpkg("MarioniLab/DropletUtils")` package, specifiying an FDR threshol of 1% and a minimum library size of 1000 molecules. 
-This method identifies a background RNA distribution in the data, and scores cell presence based on transcriptome divergence from the background. 
+To test the effect of molecule exclusion on the data, we called cells from the processed and raw count matrices. 
+If we successfully removed swapped reads, we should eliminate the artefactual cells that we identified in Samples B1 and B2 above (see section 4.4, **Artefactual cells due to barcode swapping in compromised samples**). 
+We used the `emptyDrops` function from the `r Githubpkg("MarioniLab/DropletUtils")` package to detect cells, specifiying an FDR threshold of 1% and a minimum library size of 1000 molecules. 
+This method tests whether the expression profile for a cell barcode is significantly different from the pool of background RNA, to distinguish cell-containing and empty droplets.
 The results of cell calling are shown in Table \@ref(tab:call-cells) and visualized in Figure \@ref(fig:call-cells).
 
-```{r call-cells, message = FALSE, fig.cap = "Number of cells called in each sample before and after swapped molecule removal. Note that the number of called cells is different to those recorded earlier in this document, as this figure considers cells called by emptyDrops, and the earlier figure by CellRanger."}
-
+```{r call-cells, message = FALSE, fig.cap = "Number of cells called in each sample of dataset 2 (sequenced on the HiSeq 4000) before and after swapped molecule removal. Note that the number of called cells is different to those shown earlier in this document, as this figure uses emptyDrops while the earlier figures use the CellRanger algorithm."}
 call_cells = function(expr.matrix){
-
-  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
-  
-  test = test[!is.na(test$FDR),]
-  
-  sig = sum(test$FDR <= 0.01)
-  
+  test <- emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
+  test <- test[!is.na(test$FDR),]
+  sig <- sum(test$FDR <= 0.01)
   return(sig)
-  
 }
 
-sample_map = unique(samp2_all$SampleID)
-names(sample_map) = c("A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1")
+sample_map <- unique(samp2_all$SampleID)
+names(sample_map) <- c("A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1")
 
+tab <- data.frame(sample = sample_map, 
+                  cells_pre = sapply(seq_along(cleaned_4000$cleaned), 
+                                     function(i) call_cells(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]])),
+                  cells_post = sapply(cleaned_4000$cleaned, call_cells))
 
-
-tab = data.frame(sample = sample_map, 
-                 cells_pre = sapply(seq_along(cleaned_4000$cleaned), 
-                                    function(i) call_cells(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]])),
-                 cells_post = sapply(cleaned_4000$cleaned, call_cells))
-
-cellcall = tab
-
+cellcall <- tab
 kable(tab, row.names = FALSE, col.names = c("Sample", "All molecules", "Unswapped molecules"), caption = "Number of cells called before and after swapped molecule processing.")
 
 ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
@@ -1869,10 +1784,8 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
   scale_fill_brewer(palette = "Set2", name = "", label = c("Raw counts", "Unswapped\ncounts")) +
   labs(x = "Sample", y = "Number of called cells")
 
-
-n_change = sum(tab$cells_pre[!grepl("B", tab$sample)] - tab$cells_post[!grepl("B", tab$sample)])
-n_healthy = sum(tab$cells_pre[!grepl("B", tab$sample)])
-
+n_change <- sum(tab$cells_pre[!grepl("B", tab$sample)] - tab$cells_post[!grepl("B", tab$sample)])
+n_healthy <- sum(tab$cells_pre[!grepl("B", tab$sample)])
 ```
 
 Our molecule exclusion method successfully removes the artefactual cells in B1 and B2.
@@ -1881,19 +1794,18 @@ This suggests that, once swapped molecules are removed, the barcode libraries re
 Molecule-based exclusion is preferable to cell-based exclusion, which would have resulted in the loss of all barcodes shared between B1/B2 and the other samples.
 However, our method still resulted in the loss of `r n_change` cells from the other samples (`r format(n_change/n_healthy * 100, digits = 3)`% of pre-correction cells).
 This is due to the removal of swapping contributions that inflate the total UMI count and encourage detection of potentially spurious cells.
+(Remember that, regardless of the number of reads, each combination will still contribute a single UMI count to a sample.)
 
 As previously mentioned, CellRanger will always call some barcodes as cells, regardless of whether they are derived from swapping.
 As such, CellRanger fails to eliminate the artefactual cells in samples B1 and B2, even after we have removed the swapped transcripts (Figure \@ref(fig:call-cellranger)). 
 We therefore recommend `emptyDrops`, which is more suitable for use with our molecule exclusion approach.
 
-```{r call-cellranger, fig.cap = "Number of cells called in each sample before and after swapped molecule removal. Cell calling was performed with an algorithm like CellRanger's. The results demonstrate that CellRanger's cell calling algorithm can artefactual results whether or not swapped transcripts are removed.", message = FALSE, warning = FALSE}
-
-tab = data.frame(sample = sample_map, 
-                 cells_pre = sapply(seq_along(cleaned_4000$cleaned), 
-                                    function(i) sum(defaultDrops(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]]))),
-                 cells_post = sapply(cleaned_4000$cleaned, 
-                                     function(x) sum(defaultDrops(x))))
-
+```{r call-cellranger, fig.cap = "Number of cells called in each sample of dataset 2 (sequenced on the HiSeq 4000) before and after swapped molecule removal, using the CellRanger algorithm for cell calling.", message = FALSE, warning = FALSE}
+tab <- data.frame(sample = sample_map, 
+                  cells_pre = sapply(seq_along(cleaned_4000$cleaned), 
+                                     function(i) sum(defaultDrops(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]]))),
+                  cells_post = sapply(cleaned_4000$cleaned, 
+                                      function(x) sum(defaultDrops(x))))
 
 # kable(tab, row.names = FALSE, col.names = c("Sample", "All molecules", "Unswapped molecules"), caption = "Number of cells called before and after swapped molecule processing.")
 
@@ -1902,46 +1814,42 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
   theme_bw() +
   scale_fill_brewer(palette = "Set2", name = "", label = c("Raw counts", "Unswapped\ncounts")) +
   labs(x = "Sample", y = "Number of called cells")
-
-
-                 
 ```
 
-Finally, we run the method on two different datasets that were processed and sequenced separately.
+Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
 Thus, we should see no swapping and therefore negligible molecule removal between the two experiments. 
 We use the HiSeq 2500 dataset described above, and a complete replicate of the same experiment that was processed and sequenced (again on HiSeq 2500) at a later date.
 A summary of the two experiments is shown in Table \@ref(tab:load-run2).
 
 ```{r load-run2}
+new_files <- c(h5_files_2500,
+               dir(paste0(folder_location, "/data/molecule_info/hiseq_2500_run2"), full.names = TRUE))
 
-new_files = c(h5_files_2500,
-              dir(paste0(folder_location, "/data/molecule_info/hiseq_2500_run2"), full.names = TRUE))
+new_reads <- swappedDrops(new_files, get.diagnostics = TRUE)$diagnostics
 
-new_reads = swappedDrops(new_files, get.diagnostics = TRUE)$diagnostics
+read_present <- new_reads > 0
+present_expt1 <- read_present[,1:length(h5_files_2500)] 
+present_expt2 <- read_present[,-(1:length(h5_files_2500))]
 
-read_present = new_reads > 0
-present_expt1 = read_present[,1:length(h5_files_2500)] 
-present_expt2 = read_present[,-(1:length(h5_files_2500))]
+n_mol <- nrow(new_reads)
+n_mol_expt1 <- sum(Matrix::rowSums(present_expt1)>0)
+n_mol_expt2 <- sum(Matrix::rowSums(present_expt2)>0)
+swapped_expt1 <- sum(Matrix::rowSums(present_expt1)>1)
+swapped_expt2 <- sum(Matrix::rowSums(present_expt2)>1)
+swapped_both <- Matrix::rowSums(present_expt1) > 0 & Matrix::rowSums(present_expt2) > 0
 
-n_mol = nrow(new_reads)
-n_mol_expt1 = sum(Matrix::rowSums(present_expt1)>0)
-n_mol_expt2 = sum(Matrix::rowSums(present_expt2)>0)
-swapped_expt1 = sum(Matrix::rowSums(present_expt1)>1)
-swapped_expt2 = sum(Matrix::rowSums(present_expt2)>1)
-swapped_both = Matrix::rowSums(present_expt1) > 0 & Matrix::rowSums(present_expt2) > 0
-
-df = data.frame("Metric" = c("Number of molecules", "Number of swapped molecules", "Swapped fraction"),
-                "Experiment 1" = c(n_mol_expt1, swapped_expt1, format(swapped_expt1/n_mol_expt1, digits = 3)),
-                "Experiment 2" = c(n_mol_expt2, swapped_expt2, format(swapped_expt2/n_mol_expt2, digits = 3)))
+df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecules", "Swapped fraction"),
+                 "Experiment 1" = c(n_mol_expt1, swapped_expt1, format(swapped_expt1/n_mol_expt1, digits = 3)),
+                 "Experiment 2" = c(n_mol_expt2, swapped_expt2, format(swapped_expt2/n_mol_expt2, digits = 3)))
 
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
-
 ```
 
-Between the two datasets, `r sum(swapped_both)` molecules were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all observed molecules, approximately two orders of magnitude less than the number of molecules observed to swap within samples on HiSeq 2500).
+Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations).
+This is approximately two orders of magnitude less than the number of molecules observed to swap within samples on the HiSeq 2500.
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
-#Manuscript figure code
+# Manuscript figure code
 
 Below is the code used to generate the figures used in the manuscript.
 
