@@ -1325,13 +1325,20 @@ knitr::include_graphics(paste0(folder_location, "/figs/10x_bcs.pdf"))
 
 As discussed in the main text, swapping of the sample barcode can have two effects depending on whether the same cell barcodes are present in both the donor and recipient samples. 
 If they are, the expression profile for each shared cell barcode in the recipient sample will become a mixture with the corresponding profile in the donor sample. 
-Otherwise, artefactual cells may appear in the recipient sample, correspodning to the swapped-in cell barcodes from the donor sample.
+This is equivalent to the effect in plate-based assays, as discussed above for the Richard and Nestorowa datasets.
+Otherwise, artefactual cells may appear in the recipient sample, corresponding to the swapped-in cell barcodes from the donor sample.
+This manifests as an increase in the number of shared cell barcodes between samples.
+
+Barcode swapping is additionally problematic with UMI data where multiple reads for the same captured cDNA molecule are collapsed into a single UMI count.
+Even a very small number of swapped reads for a molecule will constitute a single count in the recipient sample.
+This means that the contribution of a few swapped reads will be the same as the contribution of a molecule that is sequenced hundreds or thousands of times in its sample of origin.
+In this manner, the effect of barcode swapping on the recipient expression profile is effectively inflated in UMI data compared to read count data.
 
 ## Shared cell barcodes between multiplexed samples
 
 ### Description of the null model
 
-Here, we investigate whether the barcode swapping phenomenon causes an excess of cell barcode sharing in droplet data.
+Here, we investigate whether swapping of the sample barcode causes an excess of cell barcode sharing between multiplexed droplet-based scRNA-seq samples.
 Assuming that cell barcodes are drawn at random for each sample, we can formulate a null model for the proportion of shared cell barcodes between two samples.
 
 We used data generated from the 10X Chromium system, where there are approximately 750,000 unique cell barcodes [@zheng_massively_2017]. 
