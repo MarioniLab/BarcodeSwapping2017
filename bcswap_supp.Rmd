@@ -177,9 +177,10 @@ The median total for impossible combinations is `r format(medfrac.all*100, digit
 while the total number of all reads assigned to impossible combinations is `r format(totfrac.all*100, digits = 2)`% of that assigned to expected combinations.
 
 We emphasize that our results are highly robust to contamination from ambient RNA or human/bacterial sources.
-Regardless of the amount of contamination, the impossible barcode combinations should not contain any reads.
+Such contamination, which is possible on empty wells of a microwell plate, may lead to the appearance of an elevated rate of swapping, because mappable reads are detected where no cell was placed.
+Regardless of the amount of contamination, the impossible barcode combinations should not contain any reads, because these pairs of barcodes were never mixed in library preparation.
 Barcode swapping is the only possible mechanism for obtaining a substantial number of non-zero reads for these combinations.
-(We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space).
+(We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space.)
 This provides a point of difference for our experimental design compared to that of @sinha_index_2017.
 
 ## Swapping rate estimation
@@ -625,13 +626,13 @@ We only calculate this score for genes that are present at a minimum level of 50
 It is important to have a large number of transcripts present, otherwise swapping may be too rare to detect.
 The information scores are plotted in Figure \@ref(fig:gene-vars) for a few randomly chosen plates.
 
-```{r gene-vars, warning=FALSE, fig.cap="Top 1000 genes by the highest information scores, ranked in descending order. Genes with infinite scores are excluded from the plots but used in the models (there are at most 33 such ratios in one plate). Information scores are computed separately for each gene in each plate."}
+```{r gene-vars, warning=FALSE, fig.cap="Top 1000 genes by the highest information scores, ranked in descending order. Genes with infinite scores are shown as points at the top of the plots. Information scores are computed separately for each gene in each plate."}
 set.seed(42)
 plates <- sample(length(noswap_split), 4)
 gene_vars <- lapply(plates, function(i) 
   apply(noswap_split[[i]][rowMax(noswap_split[[i]])>500,], 1,  function(x) max(x)/quantile(x, 0.9)))
 gene_vars <- lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
-gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
+# gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
 plate_ids <- lapply(1:length(gene_vars), function(x) rep(plates[x], length(gene_vars[[x]])))
 indices <- lapply(gene_vars, function(x) 1:length(x))
@@ -1341,8 +1342,9 @@ In this manner, the effect of barcode swapping on the recipient expression profi
 Here, we investigate whether swapping of the sample barcode causes an excess of cell barcode sharing between multiplexed droplet-based scRNA-seq samples.
 Assuming that cell barcodes are drawn at random for each sample, we can formulate a null model for the proportion of shared cell barcodes between two samples.
 
-We used data generated from the 10X Chromium system, where there are approximately 750,000 unique cell barcodes [@zheng_massively_2017]. 
-We find 737,280 columns in the raw matrix output of CellRanger, which we use as the total number of cell barcodes $N$. 
+We used data generated from the 10X Chromium system, where there are "approximately 750,000"" unique cell barcodes [@zheng_massively_2017]. 
+Specifically, CellRanger returns a raw count matrix of 737,280 columns as output for each sample.
+We consider this as the total number of cell barcodes $N$.
 For samples 1 and 2, we have $n_1$ and $n_2$ cell barcodes, respectively, that have been called as cells. 
 Further denote the number of shared cell barcodes observed between samples 1 and 2 is $S$.
 
@@ -1705,7 +1707,6 @@ ggplot(mapping = aes(x = large_frac)) +
   labs(x = "Largest read fraction", y = "Cumulative distribution")
 ```
 
-
 As a negative control, the same libraries were re-sequenced on HiSeq 2500. 
 Table \@ref(tab:table-compare) presents summary values for the two sets of data.
 
@@ -1759,6 +1760,30 @@ we cannot reliably identify the sample of origin.
 We therefore remove the combination from the UMI count in all samples.
 
 Using this method, we excluded `r format( ( 1 - sum(sapply(cleaned_4000$cleaned, sum))/nrow(reads_4000) ) * 100, digits = 3)`% of molecules in the HiSeq 4000 data.
+
+```{r tenx_swap_rate}
+
+frac_4000 <- apply(reads_4000, 1, max)/Matrix::rowSums(reads_4000)
+dominant <- reads_4000[frac_4000 >= 0.8 & frac_4000 != 1,]
+swapped_reads_dom = apply(seq_len(nrow(dominant)), function(x) sum(dominant[x,][-which.max(dominant[x,])]))
+other <- reads_4000[frac_4000 < 0.8,]
+swapped_4000 <- sum(other) + swapped_reads_dom
+rate_4000 <- swapped_4000/sum(reads_4000)
+
+
+frac_2500 <- apply(reads_2500, 1, max)/Matrix::rowSums(reads_2500)
+dominant <- reads_2500[frac_2500 >= 0.8 & frac_2500 != 1,]
+swapped_reads_dom = apply(seq_len(nrow(dominant)), function(x) sum(dominant[x,][-which.max(dominant[x,])]))
+other <- reads_2500[frac_2500 < 0.8,]
+swapped_2500 <- sum(other) + swapped_reads_dom
+rate_2500 <- swapped_2500/sum(reads_2500)
+
+```
+
+Using this framework, we can estimate a swapping rate from this 10X data by considering the fraction of all reads that we deem to have swapped.
+This is an underestimate of the swapping rate, because our labelling of swapped reads does not capture all such swaps.
+This includes swaps into the dominant fraction, and also swaps that keep a molecule within a 10X sample (because each 10X sample is made up of four different Illumina sample barcodes).
+Nevertheless, this approach provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on HiSeq 2500.
 
 To test the effect of molecule exclusion on the data, we called cells from the processed and raw count matrices. 
 If we successfully removed swapped reads, we should eliminate the artefactual cells that we identified in Samples B1 and B2 above (see section 4.4, **Artefactual cells due to barcode swapping in compromised samples**). 
@@ -1858,8 +1883,25 @@ kable(df, caption = "Summary of the two different experiments.", row.names = FAL
 ```
 
 Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations).
-This is approximately two orders of magnitude less than the number of molecules observed to swap within samples on the HiSeq 2500.
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
+
+# Experimental solutions for barcode swapping
+
+One proposed solution for the problem of swapping are unique-at-both-ends indices. 
+In these experiments, each cell's transcriptome is indexed with a unique barcode at both transcript ends that are never used for any other transcriptomes for the multiplexed set of samples. 
+Therefore a single barcode swap simply moves a sequencing read into empty space, not into another library. This is an effective solution for the multiplexing of a relatively low number of libraries for sequencing (e.g. [Nugen provide sets of 96 pairs of indexes](https://www.nugen.com/content/nugen-introduces-unique-indexing-solutions-illumina’s-high-capacity-sequencing-platforms). 
+
+However, for single-cell RNA-seq, it may be desirable to sequence many hundreds of multiplexed samples (i.e. cells) together, particularly as sequencing facilities transition towards the use of higher-throughput machines. 
+Use of unique-at-both-ends indices may not be feasible in these experiments, because of the loss of combinatorial complexity that barcode reuse provides.
+Specifically, sharing barcodes allows for $n\times m$ libraries to be multiplexed, where $n$ and $m$ are the number of row and column barcodes respectively.
+For a unique-at-both-ends approach, only $\frac{n+m}{2}$ libraries can be multiplexed.
+This particularly problematic for methods such as sci-Seq (@cao_comprehensive_2017), where the reuse of barcodes between cells generates the combinatorial complexity that allows massively high-throughput generation of cell libraries.
+
+Additionally, droplet-based protocols (e.g. 10X Genomics) are becoming increasingly popular. 
+In these experiments, samples are labelled with a single index, and so are not compatible with the unique-at-both-ends indexing approach.
+
+While we would encourage experimental design that uses unique-at-both-ends indexing where possible, it is clearly the case that it is not a suitable approach for all experiments.
+
 
 # Manuscript figure code
 
