@@ -1955,7 +1955,7 @@ call_cells = function(expr.matrix){
   
   test = test[!is.na(test$FDR),]
   
-  sig = sum(test$FDR <= 0.01)
+  sig = sum(test$FDR <= 0.01 & test$total >= 1000)
   
   return(sig)
   
@@ -2110,7 +2110,7 @@ print(conc)
 #get library size
 get.libsizes = function(expr.matrix){
   
-  test = emptyDrops(expr.matrix, test.args = list(niters = 30000))
+  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
   
   test = test[!is.na(test$FDR),]
   
