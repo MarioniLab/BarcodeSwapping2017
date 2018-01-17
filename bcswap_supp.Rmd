@@ -235,13 +235,6 @@ $$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} +
 This represents a linear relationship between the library size for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
 We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
 
-<!--
-The experimental design results in cells being seeded in two blocks of 96 wells (see Figure \@ref(fig:richard-schematic)), corresponding to $1 \leq i \leq 8$, $13 \leq j \leq 24$ and $9 \leq i \leq 16$, $1 \leq j \leq 12$. 
-Remaining barcode combinations (in the off-diagonal blocks) were not seeded with any cells or reagents. 
-Additionally the well with index $i=1,j=24$ was empty by design.
--->
-
-
 ```{r correlation, fig.cap="Relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode in the HiSeq 4000 data. Each point represents an impossible barcode combination. The line of best fit is shown along with the coefficient of determination."}
 # Melting the data frame purely to make casting it easier
 molten = melt( libs[libs$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
@@ -294,10 +287,6 @@ where $\mathcal{E}$ is a set of all expected combinations.
 The multiplication by 38 is due to the fact that there are 38 available destinations for a single-barcode-swapped read from any single expected combination (Figure \@ref(fig:swap-schematic-receive)). 
 In other words, we sum each $M_{i,j}$ 38 times in the first line of the above expression.
 This includes the impossible barcode combinations as well as the real cell combinations.
-
-<!-- The slope ($\beta$) is `r format(coef(summary(mod_mapped))[2,1], digits = 3, nsmall = 3)`, which corresponds to the rate at which barcode swapped molecules appear in the single unexpected barcode combination libraries from the 20 donor libraries (see Figure \@ref(fig:swap-schematic-source)). However, because the 20 donor libraries are also contributing swaps to each of the 20 recipient libraries on their row and column, the slope $\beta$ actually corresponds to the rate of incoming swapped transcripts per recipient per donor. -->
-
-<!-- However, we are only considering the 20 *unexpected* barcode combinations in each row and column of a true cell. In reality, each of the cells is swapping into 38 total barcode combinations - 15 along the column and 23 along the row, both excluding the cell itself. For example, the red cell shown in Figure \@ref(fig:swap-schematic-receive) below can swap reads into all of the blue barcode combinations. -->
 
 ```{r swap-schematic-receive, fig.cap="Schematic illustrating the contribution of a donor library (red) to each of 38 recipient libraries that share a single barcode (blue). Cell-loaded combinations are shown in grey, and unloaded combinations are shown in black."}
 is_target <- libs$bc1 == "N705" & libs$bc2 == "S505"
@@ -386,8 +375,6 @@ mod_mapped_2500 <- lm(df$mapped ~ df$tot)
 ggplot(df, aes(x = tot, y = mapped)) +
     geom_abline(slope = coef(mod_mapped_2500)[2], intercept = coef(mod_mapped_2500)[1], lwd = 1.5 ) +
   geom_point(col = "grey50") +
-  # geom_smooth(method = "lm", se = FALSE, col = "black", formula = y ~ x) +
-  # scale_x_log10() + scale_y_log10() +
   labs(x = expression("Available swapping reads,"~S["i,j"]), y = expression("Observed swapped reads,"~X["i,j"])) +
   theme_bw() +
     scale_x_continuous(breaks = c(5e6, 1e7), labels = c("5,000,000", "10,000,000")) +
@@ -489,7 +476,6 @@ plate_plot <- function(gene, meta, counts, log_transform = TRUE, plot = FALSE) {
   plot_out <- ggplot(melt, aes(x = Var2, y = Var1)) +
     geom_tile(aes(fill = value), color = "white") +
     scale_fill_gradientn(colors = c("grey70", "cornflowerblue", "black"), name = "log2(count+1)") +
-    # scale_fill_viridis(name = "log2(count+1)") +
     annotate(geom = "text", x = melt$Var2, y = melt$Var1, label = format(melt$value, digits = 2), color = "white") +
     labs(x = "", y = "")
   
@@ -532,7 +518,6 @@ delta <- plate_4000[[1]] - plate_2500[[1]]
 melt <- melt(delta)
 plot_out <- ggplot(melt, aes(x = Var2, y = Var1)) +
   geom_tile(aes(fill = value), color = "white") +
-  # scale_fill_gradientn(colors = c("coral" ,"grey70", "cornflowerblue", "black"), name = "delta log2(count+1)", values = rescale(c(min(melt$value), 0, max(melt$value)/2, max(melt$value)))) +
   scale_fill_gradientn(colors = c("royalblue3" ,"grey80", "indianred3"), name = "delta log2(count+1)", values = rescale(c(min(melt$value), 0, max(melt$value)))) +
   annotate(geom = "text", x = melt$Var2, y = melt$Var1, label = format(melt$value, digits = 2), color = "white") +
   labs(x = "", y = "") +
@@ -544,8 +529,6 @@ plot_out
 These crosshair patterns demonstrate that swapping along rows and columns is the primary mode of read transfer between libraries.
 This supports our assumption that swapping is a rare event.
 In the vast majority of cases, swapping will occur no more than once to the same molecule, restricting the transfer of reads between libraries that already share a single barcode.
-
-<!-- It is possible that there are some more subtle effects - for example, an excess of barcode for a particular row or column of a plate may result in a greater amount of swapping to barcode combinations that contain this particular barcode. However, this is difficult to quantify -->
 
 ## Quantifying the swapping fraction
 
@@ -634,7 +617,6 @@ plates <- sample(length(noswap_split), 4)
 gene_vars <- lapply(plates, function(i) 
   apply(noswap_split[[i]][rowMax(noswap_split[[i]])>500,], 1,  function(x) max(x)/quantile(x, 0.9)))
 gene_vars <- lapply(gene_vars, function(x) x[order(x, decreasing = TRUE)])
-# gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
 plate_ids <- lapply(1:length(gene_vars), function(x) rep(plates[x], length(gene_vars[[x]])))
 indices <- lapply(gene_vars, function(x) 1:length(x))
@@ -691,24 +673,22 @@ Gene subsetting and fitting of the model was performed separately for each plate
 # bc1, bc2 are vectors for the barcodes for the cells in each of the plates
 # constrain == TRUE uses a constrained fit, all coef > 0
 # n.genes is the number of genes to select (see above for explanation)
+# sample performs random sampling of the n.genes that were selected, choosing sample genes from it.
 # RETURN:
-# vector of coefficients, "other" is cells that share no barcodes, "rowcol" is cells that share one barcode
-#   "self" is the cell that shares 2 barcodes (i.e. itself.)
+# list - params: values of alpha, beta, gamme
+#      - beta: matrix that defines cell-cell barcode relationships
+#      - count_2500: counts matrix for use in calc_rate()
 get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = TRUE, n.genes = 500, sample = NULL){
   nsamples = ncol(plate_4000)
   
 
   #### GENE SELECTION
   if(nrow(plate_4000)>1){
-    #straight SD version
-    # top_var = apply(plate_2500, 1, sd)
     
     #As a fraction of the 0.9 quantile
     #logic being that these are the genes that show the "crosshair" patterns
     top_var = apply(plate_2500, 1, function(x) max(x)/quantile(x, 0.9))
-    
-    #Max expression vs. second highest cell
-    # top_var = apply(plate_2500, 1, function(x) max(x)/max(x[-which.max(x)]))
+
   
     # impose an expression limit - the gene must be expressed in a cell with at least 500 counts
     # (otherwise some of the methods above pick up genes expressed with, say, 
@@ -734,6 +714,7 @@ get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = TRUE,
     pure <- plate_2500[top_genes,]
   } else {
     #if only one gene was supplied we don't subset
+    #for debugging
     mixed = plate_4000
     pure = plate_2500
   }
@@ -786,7 +767,7 @@ get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = TRUE,
   }
   
   
-  #we need to shrink variables to prevent overflow in limsolve::lsei
+  #we need to shrink variables to prevent overflow in limSolve::lsei
   val = base::norm(responses, "2")
   shrunk_design = design/val
   shrunk_responses = responses/val
@@ -796,7 +777,6 @@ get_mixing_matrix = function(plate_4000, plate_2500, bc1, bc2, constrain = TRUE,
     res = solve(qr(design), matrix(unlist(responses)))
     out = res[,1]
   } else {
-    #this implementation of lsei prevents fortran overflows but is otherwise identical
     res = limSolve::lsei(A = as.matrix(shrunk_design), 
                          B = unlist(shrunk_responses), 
                          G = diag(ncol(design)), 
@@ -1396,15 +1376,6 @@ compare <- function(barcodes, samples) {
 }
 ```
 
-<!-- Notably, the sample indexes provided by 10X to label individual runs of the machine are actually a mixture of four different indices. Therefore it is possible for a barcode swap to occur between indices within the same sample (Figure \@ref(fig:tenx-swap)); this will not be detectable after processing as all transcripts of the same *sample* are considered together, independent of which particular barcode from that sample was used. This makes this system inconvenient for estimating swapping rates. Instead, our analysis here focusses on the *consequences* of swapping in droplet data. -->
-
-<!-- ```{r tenx-swap, fig.cap="10X barcode swapping. 10X samples are labelled by sets of four barcodes. This means that it is possible for a transcript to swap its sample barcode to another within the same sample: after processing, it will not appear as though any swap has happened, because the read is still allocated to the same sample. Swaps to other samples may still occur, which may produce the artefacts described above."} -->
-
-<!-- knitr::include_graphics(paste0(folder_location, "/figs/10x_swap.pdf")) -->
-
-
-<!-- ``` -->
-
 ### Dataset 1 on the HiSeq 2500
 
 ```{r load-2500-drop}
@@ -1479,19 +1450,6 @@ hist(bad_comp$p, xlab = "p", xlim =c(0,0.01), breaks = 10, main = "HiSeq 4000, m
 
 Despite this, the absolute rate of cell barcode sharing is still low.
 Of `r nrow(samp2)` barcodes, only `r sum(table(samp2$barcode)>1)` cell barcodes occur more than once across all samples in this dataset.
-
-<!-- - see the table below: -->
-
-<!-- ```{r bad-table} -->
-<!-- table(table(samp2$barcode)) -->
-
-<!-- get_fraction = function(barcodes){ -->
-<!--   dup = unique(barcodes[duplicated(barcodes)]) -->
-<!--   return(sum(barcodes%in%dup)/length(barcodes)) -->
-<!-- } -->
-
-<!-- fracs = c(get_fraction(samp2$barcode), get_fraction(samp3$barcode), get_fraction(barcodes)) -->
-<!-- ``` -->
 
 ### Dataset 3 on the HiSeq 4000
 
@@ -1942,34 +1900,7 @@ While we would encourage experimental design that uses unique-at-both-ends index
 
 Below is the code used to generate the figures used in the manuscript.
 
-```{r figure}
-# 
-# rate = ggplot(df_4000, aes(x = tot, y = mapped)) +
-#     geom_smooth(method = "lm", se = FALSE, col = "black", alpha = 0.3, lwd = 1.5) +
-#   geom_point(col  = "cornflowerblue") +
-#   # scale_x_log10() + scale_y_log10() +
-#   labs(x = "Available swapping reads", y = "Observed swapped reads") +
-#   theme_bw() +
-#     scale_x_continuous(breaks = c(5e6, 1e7, 1.5e7), labels = c("5,000,000", "10,000,000", "15,000,000")) +
-#   scale_y_continuous(breaks = seq(2500, 10000, 2500), labels = c("2,500", "5,000", "7,500", "10,000"))+
-#   theme(axis.text = element_text(face = "bold", size = 15, colour = "black"),
-#        axis.title.y = element_text(size = 20, face = "bold"),
-#        axis.title.x = element_text(size = 20, face = "bold"))
-# 
-# print(rate)
-# 
-# 
-# 
-
-# bc_conc
-#colourful but worse
-# ggplot(conc_df, aes (x = bc_mol, y= seq_mol, col = swap_rate, size = swap_rate)) +
-#   geom_point() +
-#   scale_color_viridis(name = "Swap Rate") +
-#   theme_bw() +
-#   scale_size_continuous(name = "Swap Rate") +
-#   labs(x = "Barcode molarity (pmol/L)", y = "Sequenced cDNA molarity (pmol/L)")
-
+```{r figure, warning = FALSE}
 
 model = lm(conc_df$swap_rate ~ conc_df$bc_mol)
 print(summary(model))
