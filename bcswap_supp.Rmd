@@ -1331,7 +1331,7 @@ Specifically, utilisation of CellRanger returns a raw count matrix of 737,280 co
 This does not include any cell filtering.
 We therefore consider this value as the total number of cell barcodes $N$.
 For samples 1 and 2, we have $n_1$ and $n_2$ cell barcodes, respectively, that have been called as cells. 
-We further denote the number of shared cell barcodes observed between samples 1 and 2 is $S$.
+We further denote the number of shared cell barcodes observed between samples 1 and 2 as $S$.
 
 Under the null hypothesis (i.e., no barcode swapping between samples), cell barcodes are drawn independently in each sample.
 In this case, the number of shared cell barcodes between samples should follow a hypergeometric distribution.
@@ -1586,7 +1586,7 @@ Barcodes are then marked for exclusion if they are observed in more than one of 
 For each $n$, 100,000 simulations were run. 
 
 Figure \@ref(fig:sim-removals) shows the rate of cell removal for different values of $n$.
-The expected rate of removal is low (< 5%) at low $n$ corresponding to a conventionally sized experiment (< 4,000 cells per sample).
+The expected rate of removal is low (< 5%) at low $n$ corresponding to a small experiment (< 4,000 cells per sample).
 In such cases, cell exclusion is a simple and effective strategy for removing swapping artifacts without discarding much data.
 However, it is not suitable for datasets with many ($n > 10000$) cells per sample, where the expected rate of removal exceeds 10%.
 Similarly, it should not be used in cases where many samples are multiplexed for sequencing.
@@ -1869,7 +1869,7 @@ For a unique-at-both-ends approach, only $\frac{n+m}{2}$ libraries can be multip
 For sharing barcodes on individual 96-well plates, $\frac{96(n+m)}{20}$ libraries can be multiplexed
 The difference in scaling of these values is illustrated in Figure \@ref(fig:scaling) and Figure \@ref(fig:scaling-low).
 
-```{r scaling, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. "Unique barcodes" indicates unique-at-both-ends indexing. "Shared barcodes, NxN scheme" indicates the use of half of the barcode set as "column" indices, and the other half as "row" indices. "Shared barcodes, 96 well plates" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above)."}
+```{r scaling, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. \"Unique barcodes\" indicates unique-at-both-ends indexing. \"Shared barcodes, NxN scheme\" indicates the use of half of the barcode set as \"column\" indices, and the other half as \"row\" indices. \"Shared barcodes, 96 well plates\" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above)."}
 
 nbc = seq(2, 500, 2)
 pdf = data.frame(barcodes = nbc, unique = nbc/2, shared = (nbc/2)^2)
@@ -1880,13 +1880,13 @@ plot = ggplot(pdf) +
   geom_line(data = data.frame(X = seq(0, 500, 20), Y = seq(0, 500, 20) * 96/20), mapping = aes(x = X, y = Y, col = "plate"), lwd = 2) +
   theme_bw() +
   labs(x = "Number of available barcodes", y = "Number of possible multiplexed libraries") +
-  scale_color_manual(values = c("unq" = "coral3", "rep" = "seagreen3", "plate" = "purple"), labels = c("Unique barcodes", "Shared barcodes,\nNxN scheme", "Shared barcodes,\n96-well plates"), name = "") +
+  scale_color_manual(values = c("unq" = "coral3", "rep" = "seagreen3", "plate" = "purple"), labels = c("unq" = "Unique barcodes", "rep" = "Shared barcodes,\nNxN scheme", "plate" = "Shared barcodes,\n96-well plates"), name = "") +
   theme(legend.position = c(0.3, 0.8))
 
 print(plot)
 ```
 
-```{r scaling-low, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. "Unique barcodes" indicates unique-at-both-ends indexing. "Shared barcodes, NxN scheme" indicates the use of half of the barcode set as "column" indices, and the other half as "row" indices. "Shared barcodes, 96 well plates" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above). The scale is cropped to show the number of combinations up to 300 barcodes."}
+```{r scaling-low, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. \"Unique barcodes\" indicates unique-at-both-ends indexing. \"Shared barcodes, NxN scheme\" indicates the use of half of the barcode set as \"column\" indices, and the other half as \"row\" indices. \"Shared barcodes, 96 well plates\" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above). The scale is cropped to show the number of combinations up to 300 barcodes."}
 print(plot + coord_cartesian(xlim = c(0, 300), ylim = c(0, 5000)) + theme(legend.position = c(0.7, 0.6)))
 ```
 
