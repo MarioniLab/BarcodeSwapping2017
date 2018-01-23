@@ -185,7 +185,7 @@ Barcode swapping is the only possible mechanism for obtaining a substantial numb
 (We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space.)
 This provides a point of difference for our experimental design compared to that of @sinha_index_2017.
 
-## Swapping rate estimation
+## Swapping fraction estimation
 
 Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ represents a row in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ represents a column ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
 Let $M_{i,j}$ denote the number of seeded cDNA molecules that truly originate from this combination, and let $X_{i,j}$ denote the number of mapped reads.
@@ -511,7 +511,7 @@ frac_4000 <- get_fraction(gene = rownames(swap_split[[1]])[row(noswap_split[[1]]
 
 While the crosshair pattern is present with both machines, it is clearly stronger on the HiSeq 4000. 
 There are `r format(frac_4000*100, digits = 3)`% as many *Igkc* reads in the crosshair as in the central highly-expressing cell in the HiSeq 4000 data, compared to `r format(frac_2500*100, digits = 3)`% for the HiSeq 2500. 
-This is consistent with the order-of-magnitude difference in the swapping rate between the two technologies estimated from the Richard data.
+This is consistent with the order-of-magnitude difference in the swapping fraction between the two technologies estimated from the Richard data.
 The increase in *Igkc* coverage in the crosshair with the HiSeq 4000 is clearly shown by visualizing the log~2~-fold change in coverage for each cell (Figure \@ref(fig:frac-plate-plot)).
 
 ```{r frac-plate-plot, fig.cap="Log~2~-fold change of the read count of the *Igkc* gene in the HiSeq 4000 data over the HiSeq 2500 in every cell of the first plate. A pseudo-count of 1 was added to avoid undefined log-fold changes."}
@@ -535,6 +535,7 @@ In the vast majority of cases, swapping will occur no more than once to the same
 
 To quantify the swapping fraction, we assume that the HiSeq 2500 data contains negligible amounts of barcode swapping compared to the HiSeq 4000.
 This allows us to treat the HiSeq 2500 data as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
+(Note that we can later correct for this by multiplying our swapping fraction estimates by 1.1, consistent with the HiSeq 2500 swapping fraction estimated in Section 3.5.)
 We applied a model that identifies contributions of different cells in the HiSeq 2500 data to the swapping-affected transcriptomes of the HiSeq 4000 data. 
 Let $Y_{4000}$ denote the $G\times C$ read count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
 Let $Y_{2500}$ denote the equivalent count matrix for the HiSeq 2500 libraries.
@@ -813,7 +814,7 @@ run_1000 = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split
 
 run_sample = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 1000, sample = 500))
 
-calc_rate = function(mix_mat_list){
+calc_rate = function(mix_mat_list, make.absolute = TRUE){
   
   params = mix_mat_list$params
   beta = mix_mat_list$beta
@@ -825,8 +826,11 @@ calc_rate = function(mix_mat_list){
   top = sum(mix_mat_list$count_2500 %*% (r0 + r1))
   bottom = sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
   
-  return(top/bottom)
-
+  if(make.absolute){
+    return( (top/bottom) * 1.1)
+  } else {
+    return(top/bottom)
+  }
 }
 
 rate_500 = sapply(run_500, calc_rate)
@@ -858,10 +862,13 @@ $$
 \frac{\sigma(Y_{2500}(R_0 + R_1))}{\sigma(Y_{2500}R)}
 $$
 
+Finally, based on the swapping fraction on HiSeq 2500 being approximately one tenth of the HiSeq 4000 fraction (see Section 3.5), we multiply this estimate by 1.1.
+This converts the swapping fraction from one with respect to HiSeq 2500 to one that is absolute.
+
 Across plates, the mean swapping fraction is `r format(mean(rate_500)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
 
 ```{r plot-contrib, fig.cap="Estimates of the swapping fraction for all plates, using the top 500 most informative genes for each plate."}
-hist(rate_500, breaks = 20, xlim = c(0, 0.08), main = "", xlab = "Estimated swapping rate")
+hist(rate_500, breaks = 20, xlim = c(0, 0.08), main = "", xlab = "Estimated swapping fraction")
 ```
 
 We obtained similar results with the top 250 (`r format(mean(rate_250)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%%) most informative genes per plate.
@@ -884,7 +891,7 @@ ggplot(data.frame(genes = genes, rate = rate_est, plate = rep(1:16, 4)),
   geom_point(size = 3) +
   theme_bw() +
   scale_color_brewer(palette = "Set1", name = "Number\nof genes\nconsidered") +
-  labs(x = "Plate", y = "Swapping rate estimate")
+  labs(x = "Plate", y = "Swapping fraction estimate")
 ```
 
 In the Richard dataset, we considered swapping along rows and columns exclusively. 
@@ -895,7 +902,7 @@ $$
 $$
 
 ```{r rowcol-only}
-calc_rate_rowcol <- function(mix_mat_list) {
+calc_rate_rowcol <- function(mix_mat_list, make.absolute = TRUE) {
   params <- mix_mat_list$params
   beta <- mix_mat_list$beta
   
@@ -905,20 +912,26 @@ calc_rate_rowcol <- function(mix_mat_list) {
   
   top <- sum(mix_mat_list$count_2500 %*% (r1))
   bottom <- sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
-  return(top/bottom)
+
+  if(make.absolute){
+    return( (top/bottom) * 1.1)
+  } else {
+    return(top/bottom)
+  }
 }
 
 rate_500_rowcol <- sapply(run_500, calc_rate_rowcol)
 ```
 
-This yields an estimated row-column swapping fraction of `r format(mean(rate_500_rowcol)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100, digits = 3)`%. 
+We again multiply by 1.1 to adjust to absolute swapping fraction estimates.
+This yields an estimated row-column swapping fraction of `r format(mean(rate_500_rowcol)*100*1.1, digits = 4)` $\pm$ `r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100*1.1, digits = 3)`%. 
 These row-column swapping fractions are well-correlated with the total swapping fractions (Figure \@ref(fig:rate-comp)).
 
-```{r rate-comp, fig.cap = "Relationship between the total swapping fraction and the row-column swapping rates. The identity line is shown for comparison."}
+```{r rate-comp, fig.cap = "Relationship between the total swapping fraction and the row-column swapping fraction. The identity line is shown for comparison."}
 qplot(rate_500, rate_500_rowcol) +
   theme_bw() +
   geom_abline(slope = 1) +
-  labs(x = "Total swapping rate", y = "Row-column swapping rate")
+  labs(x = "Total swapping fraction", y = "Row-column swapping fraction")
 ```
 
 
@@ -935,14 +948,14 @@ gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
 means <- sapply(gene_vars, mean)
 ggplot(data.frame(mean = means, rate = rate_500),
-       aes(x = mean, y = rate)) +
+       aes(x = mean*1.1, y = rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Mean gene score for top 500 genes (no Inf)",
-       y = "Swapping rate estimate")
+       y = "Swapping fraction estimate")
 ```
 
-## Linking swapping rate to library characteristics
+## Linking swapping fraction to library characteristics
 
 To attempt to understand the variance of our swapping fraction estimates, we examined the concentration of free barcodes on each plate. 
 Using the Bioanalyzer Expert software (Figure \@ref(fig:expert)), we quantified the barcode concentration in each multiplexed pool based on the area under the peak at 40-75 bp.
@@ -952,7 +965,7 @@ By comparison, sequenced cDNA should fall within the peak at 400-800 bp.
 knitr::include_graphics(paste0(folder_location, "/figs/bioanalyzer.png"))
 ```
 
-The molarities of each sample are shown in Figure \@ref(fig:load-bioanalyzer), overlaid with the calculated swapping rates. 
+The molarities of each sample are shown in Figure \@ref(fig:load-bioanalyzer), overlaid with the calculated swapping fractions. 
 
 ```{r load-bioanalyzer, fig.wide = TRUE, fig.cap = "Molarities of cDNA and free barcode for each plate, quantified using the Bioanalyzer software. The size and colour of the point corresponding to each plate is determined based on its estimate of the swapping fraction."}
 load_bio_csv <- function(filepath){
@@ -1011,7 +1024,7 @@ This is demonstrated more clearly in Figure \@ref(fig:plot-rates), where the swa
 ggplot(plot_df, aes(x = bc_mol, y= swap_rate)) +
   geom_point() +
   theme_bw() +
-  labs(x = "Barcode molarity (pmol/L)", y = "Calculated swapping rate")
+  labs(x = "Barcode molarity (pmol/L)", y = "Calculated swapping fraction")
 
 model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol))
 ```
@@ -1023,7 +1036,7 @@ Similarly, we do not observe any correlation between the swapping fraction and t
 ggplot(plot_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
   geom_point() +
   theme_bw() +
-  labs(x = "Barcode molarity / Sequenced cDNA molarity", y = "Calculated swapping rate")
+  labs(x = "Barcode molarity / Sequenced cDNA molarity", y = "Calculated swapping fraction")
 
 model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_mol))
 model_outlier <- lm(data = plot_df[-which.max(plot_df$bc_mol/plot_df$seq_mol),], formula = swap_rate ~ I(bc_mol/seq_mol))
@@ -1041,14 +1054,14 @@ seq_proxy <- sapply(1:16, function(x) sum(swap_split[[x]]))
 ggplot(plot_df, aes(x = bc_mol/seq_proxy, y= swap_rate)) +
   geom_point() +
   theme_bw() +
-  labs(x = "Barcode molarity / Total aligned reads", y = "Calculated swapping rate")
+  labs(x = "Barcode molarity / Total aligned reads", y = "Calculated swapping fraction")
 
 model <- lm(data = plot_df, formula = swap_rate ~ I(bc_mol/seq_proxy))
 ```
 
 However, we still do not see a slope significantly different from 0 (p=`r format(coef(summary(model))[2,4], digits = 3)`).
 
-In summary, our calculated swapping rates are not associated with the amount of free barcode in libraries, nor the ratio of free barcode to cDNA concentration. 
+In summary, our calculated swapping fractions are not associated with the amount of free barcode in libraries, nor the ratio of free barcode to cDNA concentration. 
 This contrasts with @sinha_index_2017, who showed that titrations of increasing amounts of additional free primer (1 nM, 10 nM, 100 nM) increased the rate of barcode swapping. 
 We note that their clearest result was that using 100nM of free barcode, which is far in excess of standard experimental quantities. 
 Our analysis suggests that the concentration of free barcode has little bearing on the rate of swapping at typical experimental levels (2-6 nM in this data).
@@ -1057,7 +1070,7 @@ Our analysis suggests that the concentration of free barcode has little bearing 
 
 In Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000), we showed a crosshair swapping pattern for a single gene for a single plate. 
 We now apply a model to each gene across all plates to determine whether swapping is happening consistently across genes.
-This differs from the previous model, which used information from many genes simultaneously to obtain a global estimate of the swapping rate for each plate.
+This differs from the previous model, which used information from many genes simultaneously to obtain a global estimate of the swapping fraction for each plate.
 
 Let $i$ denote the row index for a cell on a single 96 well plate ($1 \leq i \leq 8$) and let $j$ denote a cell's column index ($1 \leq j \leq 12$). 
 Subsequently, let $Y_{i,j,g}^{(t)}$ denote the read count of gene $g$ in cell $(i,j)$ when profiled using sequencing technology $t$, where $t=2500$ refers to the HiSeq 2500 and $t=4000$ refers to the HiSeq 4000. 
@@ -1852,8 +1865,8 @@ rate_2500 <- swapped_2500/sum(reads_2500)
 
 ```
 
-Using this framework, we can estimate a swapping rate for this 10X data by considering the fraction of all reads that we deem to have swapped.
-This is probably an underestimate of the swapping rate, because our labelling of swapped reads does not capture all swaps.
+Using this framework, we can estimate a swapping fraction for this 10X data by considering the fraction of all reads that we deem to have swapped.
+This is probably an underestimate of the swapping fraction, because our labelling of swapped reads does not capture all swaps.
 For example, this includes swaps into the dominant fraction, and also swaps that keep a molecule within a 10X sample (because each 10X sample is made up of four different Illumina sample barcodes).
 On the other hand, this approach counts molecules that have truly appeared by chance in two separate samples, although we have shown that this is very rare.
 Our swap-identification method provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on HiSeq 2500. 
@@ -1917,7 +1930,7 @@ conc = ggplot(conc_df, aes(x = bc_mol/seq_mol, y= swap_rate * 1.1)) +
   annotate("text", x= 6, y = 0.01, label = paste0("italic(R)^2 == ", format(summary(model)$r.squared, digits = 2)), parse = TRUE, fontface = "bold", size = 7) +
   theme_bw() +
   scale_x_continuous(name = "Free barcode:Sequenced cDNA ratio") +
-  scale_y_continuous(name = "Estimated swapping rate", breaks = c(seq(0, 0.08, 0.02)), labels = paste0(seq(0,8,2), "%"), limits = c(-0.0, 0.09)) +
+  scale_y_continuous(name = "Estimated swapping fraction", breaks = c(seq(0, 0.08, 0.02)), labels = paste0(seq(0,8,2), "%"), limits = c(-0.0, 0.09)) +
   theme(panel.grid = element_blank(),
         axis.title = element_text(face = "bold", size = 14),
         axis.text = element_text(face = "bold", size = 10, colour = "black"))
