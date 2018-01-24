@@ -19,7 +19,7 @@ author:
   - *cruk
   - EMBL European Bioinformatics Institute (EMBL-EBI), Wellcome Genome Campus, CB10 1SD, Hinxton, United Kingdom
   - Wellcome Trust Sanger Institute, Wellcome Genome Campus, CB10 1SA, Hinxton, United Kingdom
-date: "24/07/2017"
+date: "24/01/2018"
 output:
   BiocStyle::html_document:
     code_folding: hide
@@ -70,7 +70,7 @@ On these new flow cells, the process of "seeding" DNA molecules into the pattern
 These machines have been in use for several years in a diverse range of genomic fields.
 However, it has been recently reported that the use of these machines can lead to the mislabelling of DNA molecules with the incorrect library barcode [@sinha_index_2017]. 
 The mislabelling is likely driven by the extension of free barcode molecules using other DNA molecules as a template (Figure \@ref(fig:intro)). 
-The phenomenon has been acknowledged by Illumina [@illumina_effects_nodate], although estimates of swapping rates vary between reports [@costello_characterization_2017]. 
+The phenomenon has been acknowledged by Illumina [@illumina_effects_nodate], although estimates of swapping fractions vary between reports [@costello_characterization_2017]. 
 It is unclear whether a permanent solution to the problem will be forthcoming as rapid amplification after seeding is critical to the operation of the patterned flow cell machines [@sinha_index_2017].
 
 ```{r intro, echo=FALSE, fig.cap="Schematic of the mechanism of barcode swapping on the HiSeq 4000. (As proposed by Sinha et al (2017).)"}
@@ -133,7 +133,7 @@ Equimolar quantities of libraries from each plate were combined for sequencing.
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
 Read mapping was performed using the _Subread_ aligner (v1.5.1) [@liao_subread_2013] to the Ensembl mm10 genome with ERCC92 annotation.
 We used a Phred offset of 33 and only considered uniquely mapped reads, with default values for all other parameters.
-We counted the number of reads mapped to each gene in each cell using the `featureCounts` function [@liao_featurecounts:_2014] in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`).
+We counted the number of reads mapped to each gene in each cell using the `featureCounts` function [@liao_featurecounts:_2014] in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`, to retain only high-squality alignments).
 This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file, or to spike-in transcripts in the Thermo-Fisher ERCC92 GTF (see https://github.com/MarioniLab/CommonResources for details).
 
 ## Examination of the library sizes
@@ -222,17 +222,17 @@ However, if the duplicate molecule has swapped its barcode, the cell has effecti
 This will further decrease the value of $\tau$.
 
 
-We further assume that number of observed swapped reads is proportional to the number of molecules that are available for swapping. 
+We further assume that the number of observed swapped reads is proportional to the number of molecules that are available for swapping. 
 Define $\rho$ as the rate of swapping from any single donor library to any single recipient library, i.e., the proportion of molecules in the donor library that appear as mislabelled reads in the recipient.
 For each barcode combination, the number of reads can be modelled as 
 
-$$\bar{X}_{i,j} = \tau M_{i, j} + \rho \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \;. $$
+$$\tilde{X}_{i,j} = \tau M_{i, j} + \rho \left( \sum_{k \neq j} M_{i,k} + \sum_{l \neq i} M_{l,j}\right) \;. $$
 
-As barcode swapping is rare, $\rho$ should be very low such that $\bar{X}_{i,j} \approx \tau M_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
-We further approximate $\bar{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
+As barcode swapping is rare, $\rho$ should be very low such that $\tilde{X}_{i,j} \approx \tau M_{i,j}$ for the expected barcode combinations where $M_{i,j}>0$.
+We further approximate $\tilde{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
 This means that, for each impossible combination $(i^*, j^*)$, we have 
 
-$$\bar{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
+$$\tilde{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
 
 This represents a linear relationship between the library size for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
 We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
@@ -324,7 +324,7 @@ This is because the median-to-median fraction only considered swapped reads arri
 
 Note that we fitted the line in Figure \@ref(fig:correlation)  with an intercept term.
 The value of the intercept is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)` $\pm$ `r format(coef(summary(mod_mapped))[1,2], digits = 4, nsmall =1)`.
-This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\bar{X}_{i^*,j^*}$.
+This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\tilde{X}_{i^*,j^*}$.
 
 ## Negative control data with the HiSeq 2500
 
@@ -353,11 +353,11 @@ totfrac.2500 <- sum(libs_2500$mapped[!libs_2500$expected])/sum(libs_2500$mapped[
 ```
 
 In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode combinations. 
-The unexpected combinations have a median library size of `r format(medfrac.2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(medfrac.mapped*100, digits = 2)`% from HiSeq 4000). 
-Considering all mapped reads on the plate, there are `r format(totfrac.2500*100, digits = 2)`% as many in the unexpected combinations as in the expected ones (compared to `r format(totfrac.mapped*100, digits = 2)`% from HiSeq 4000).
+The unexpected combinations have a median library size of `r format(medfrac.2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(medfrac.mapped*100, digits = 2)`% from the HiSeq 4000). 
+Considering all mapped reads on the plate, there are `r format(totfrac.2500*100, digits = 2)`% as many in the unexpected combinations as in the expected ones (compared to `r format(totfrac.mapped*100, digits = 2)`% from the HiSeq 4000).
 
 We applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data.
-Results are shown in Figure \@ref(fig:model-2500)).
+Results are shown in Figure \@ref(fig:model-2500).
 
 ```{r model-2500, fig.cap="Relationship between the library size for each impossible combination and the sum of library sizes for all expected combinations sharing a single barcode in the HiSeq 2500 data. The line of best fit is shown along with the coefficient of determination."}
 molten <- melt( libs_2500[libs_2500$expected,] , id.vars = c( "bc1" , "bc2" ) , measure.vars = "mapped" )
@@ -398,7 +398,7 @@ However, the estimated swapping fraction is approximately an order of magnitude 
 ## Dataset overview
 
 To confirm the existance of barcode swapping, we used data from another published study [@nestorowa_single_2016], which we refer to as the Nestorowa data. 
-16 sets of single-cell RNA-seq libraries were each made on a 96-well plate, pooled together and sequenced on a single lane on a HiSeq 2500 machine.
+16 sets of single-cell RNA-seq libraries were each generated on a 96-well plate, pooled together and sequenced on a single lane on a HiSeq 2500 machine.
 At a later date, each of the same pooled libraries were sequenced on a HiSeq 4000. 
 For each plate, exactly the same pool of libraries was used in both sequencing runs, so the only differences between the results should be caused by the sequencing machines and Poisson sampling noise [@marioni_rna-seq:_2008]. 
 This is important, because repooling of libraries may reduce the precision of our swapping fraction estimate, or introduce systematic confounding.
@@ -434,7 +434,7 @@ noswap_split <- lapply(split(as.data.frame(t(noswap)), blood_meta$plate), functi
 
 We identified the gene with the most read counts in a single cell in the first plate of cells - *Igkc*. 
 This gene is almost uniquely expressed in one cell in the plate. 
-On both HiSeq 2500 and 4000 machines, we observe a "crosshair" pattern of expression for this gene (i.e., along the row and column of the most highly-expressing cell), as shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000).
+On both the HiSeq 2500 and 4000 machines, we observe a "crosshair" pattern of expression for this gene (i.e., along the row and column of the most highly-expressing cell), as shown in Figures \@ref(fig:crosshair-2500) and \@ref(fig:crosshair-4000).
 This is the same pattern that was reported by @sinha_index_2017 and is attributable to barcode swapping from a single donor cell library to all recipient libraries sharing a single barcode.
 
 ```{r crosshair}
@@ -534,11 +534,12 @@ In the vast majority of cases, swapping will occur no more than once to the same
 ## Quantifying the swapping fraction
 
 To quantify the swapping fraction, we assume that the HiSeq 2500 data contains negligible amounts of barcode swapping compared to the HiSeq 4000.
-This allows us to treat the HiSeq 2500 data as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
+This is motivated by the order-of-magnitude difference between the two sequencing machines observed in the Richard data.
+Our assumption allows us to treat the HiSeq 2500 data as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
+
 We applied a model that identifies contributions of different cells in the HiSeq 2500 data to the swapping-affected transcriptomes of the HiSeq 4000 data. 
 Let $Y_{4000}$ denote the $G\times C$ read count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
 Let $Y_{2500}$ denote the equivalent count matrix for the HiSeq 2500 libraries.
-
 Let $R$ denote a $C \times C$ matrix capturing the contribution of the HiSeq 2500 counts to the HiSeq 4000 counts. 
 Each entry of $R$ defines the proportion of each HiSeq 2500 library that makes up each HiSeq 4000 library.
 To illustrate, take the value at $(c_1, c_2)$ in $R$, and multiply it by the number of reads for cell $c_1$ in the HiSeq 2500 data.
@@ -632,8 +633,8 @@ ggplot(plot_df, aes(y = score, x = index)) +
   lims(x = c(1, 1000))
 ```
 
-For each plate, the top 250 genes contain most of the informative genes. 
 We identify the top 500 genes with the highest information scores and use only the corresponding rows in $Y_{2500}$ and $Y_{4000}$ for downstream model fitting.
+The informative gene set is selected separately for each plate.
 We consider 500 genes to ensure that we include the infinite scores (i.e., where the 90th percentile is 0) and to ensure that we do not exclude informative genes for other plates, which may have longer tails than the distributions shown above.
 We have also repeated the fits using the top 250 or 1000 genes, which yield similar estimates of the $\alpha$, $\beta$ and $\gamma$ parameters (see below, Figure \@ref(fig:genes-var)).
 Note that the chosen subset of genes will differ between plates, but this does not affect the comparability of the parameter estimates between plates.
@@ -864,7 +865,7 @@ Across plates, the mean swapping fraction is `r format(mean(rate_500)*100, digit
 hist(rate_500, breaks = 20, xlim = c(0, 0.08), main = "", xlab = "Estimated swapping fraction")
 ```
 
-We obtained similar results with the top 250 (`r format(mean(rate_250)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%%) most informative genes per plate.
+We obtained similar results with the top 250 (`r format(mean(rate_250)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_250)/length(rate_250))*100, digits = 3)`%) or 1000 (`r format(mean(rate_1000)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_1000)/length(rate_1000))*100, digits = 3)`%) most informative genes per plate.
 We also repeated the analysis with a random selection of 500 genes from the top 1000 most informative genes per plate, which yielded similar estimates (`r format(mean(rate_sample)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_sample)/length(rate_sample))*100, digits = 3)`%).
 The variance of the swapping fraction estimates for different numbers of informative genes on the same plate is smaller than the variance across plates (Figure \@ref(fig:genes-var)), indicating that the number of informative genes used in the model fit is not the major contributor to differences in the estimates between plates.
 
@@ -913,8 +914,7 @@ calc_rate_rowcol <- function(mix_mat_list) {
 rate_500_rowcol <- sapply(run_500, calc_rate_rowcol)
 ```
 
-We again multiply by 1.1 to adjust to absolute swapping fraction estimates.
-This yields an estimated row-column swapping fraction of `r format(mean(rate_500_rowcol)*100*1.1, digits = 4)` $\pm$ `r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100*1.1, digits = 3)`%. 
+This yields an estimated row-column swapping fraction of `r format(mean(rate_500_rowcol)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100, digits = 3)`%. 
 These row-column swapping fractions are well-correlated with the total swapping fractions (Figure \@ref(fig:rate-comp)).
 
 ```{r rate-comp, fig.cap = "Relationship between the total swapping fraction and the row-column swapping fraction. The identity line is shown for comparison."}
@@ -924,8 +924,7 @@ qplot(rate_500, rate_500_rowcol) +
   labs(x = "Total swapping fraction", y = "Row-column swapping fraction")
 ```
 
-
-Additionally, the mean value of the information score for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
+The mean value of the information score for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
 This indicates that the expression abundance of sporadically expressed genes does not drive differences in the swapping fraction estimates.
 
 ```{r genes-inf, fig.cap="Relationship between the swapping fraction estimate from each plate and the mean information score for the top 500 genes."}
@@ -938,12 +937,18 @@ gene_vars <- lapply(gene_vars, function(x) x[x!=Inf])
 
 means <- sapply(gene_vars, mean)
 ggplot(data.frame(mean = means, rate = rate_500),
-       aes(x = mean*1.1, y = rate)) +
+       aes(x = mean, y = rate)) +
   geom_point() +
   theme_bw() +
   labs(x = "Mean gene score for top 500 genes (no Inf)",
        y = "Swapping fraction estimate")
 ```
+
+Finally, recall our initial assumption that the swapping fraction on the HiSeq 2500 is negligable compared to that on the HiSeq 4000.
+However, some swapping does occur on the HiSeq 2500, at approximately one tenth the rate as the HiSeq 4000 (as shown in the Richard data).
+Thus, our estimate of the swapping fraction actually represents the relative increase in swapping in the HiSeq 4000 compared to the HiSeq 2500.
+We can approximate the absolute swapping fraction in the HiSeq 4000 by multiplying our estimate by 1.1.
+This yields an swapping fraction estimate of `r format(mean(rate_500_rowcol)*100 *1.1, digits = 4)` $\pm$ `r format(sqrt(var(rate_500_rowcol)/length(rate_500_rowcol))*100 *1.1, digits = 3)`% along rows and columns, which is very similar to the value calculated in the Richard data (`r format(rate_estimate * 100, digits = 3, nsmall = 3)` $\pm$ `r format(rate_error * 100, digits = 3, nsmall = 3)`%).
 
 ## Linking swapping fraction to library characteristics
 
@@ -1088,7 +1093,7 @@ $Y_{i,j,g}^{2500}$ represents the pool of reads that can be transferred from the
 $\epsilon_{i,j,g}$ represents the residual error. 
 
 Models $H_1$ and $H_0$ are fitted by least squares to high-abundance genes, i.e., mean counts greater than 50 across all plates.
-This focuses on genes that have sufficient reads for swapping to clearly manifest.
+This focuses on genes that have sufficient reads for swapping to clearly manifest itself.
 In contrast, genes with low or zero counts provide no information about the presence or absence of swapping.
 The use of least squares assumes a normal distribution for the errors, which is reasonable for large Poisson-distributed counts.
 
@@ -1406,7 +1411,7 @@ if(any(p.adjust(good_comp$p, method = "fdr")!=1)) {
 ```
 
 None of the p-values for any comparison were significant after FDR correction at any significance level (all adj. p-values equal to 1). 
-Thus, we do not observe any excess of sharing in this data, consistent with the low swapping rate on the HiSeq 2500.
+Thus, we do not observe any excess of sharing in this data, consistent with the low swapping fraction on the HiSeq 2500.
 
 ### Dataset 2 on the HiSeq 2500
 
@@ -1444,7 +1449,7 @@ samp2 <- samp2_all[!samp2_all$SampleID%in%c("B1", "B2"),]
 bad_comp <- compare(samp2$barcode, as.numeric(factor(samp2$SampleID)))
 ```
 
-The same mouse epithelial cell dataset (Dataset 2, above) was also sequenced on HiSeq 4000. 
+The same mouse epithelial cell dataset (Dataset 2, above) was also sequenced on the HiSeq 4000. 
 In this data, the six samples range in size between `r as.numeric(max(table(samp2$SampleID)))` and `r as.numeric(min(table(samp2$SampleID)))` called cells. 
 Two samples were again excluded from analysis here due to failed library preparation. 
 Here we observe low p-values in all pairwise comparisons (Figure \@ref(fig:bad-plot)), consistent with increased barcode swapping on the HiSeq 4000.
@@ -1570,7 +1575,7 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
 
 The presence of artifactual cells in this dataset is likely driven by the presence of severely compromised samples containing damaged cells. 
 However, it is possible that the multiplexing of cells of radically different RNA content could present similar problems. 
-We advise caution when combining experimental designs of this nature with HiSeq 4000 (or other patterned flow-cell) sequencing.
+We advise caution when combining experimental designs of this nature with the HiSeq 4000 (or other patterned flow-cell) sequencing.
 
 # Removing barcode-swapped artefacts from droplet data
 
@@ -1677,9 +1682,9 @@ ggplot(mapping = aes(x = large_frac)) +
   labs(x = "Largest read fraction", y = "Cumulative distribution")
 ```
 
-As a negative control, the same libraries were re-sequenced on HiSeq 2500. 
+As a negative control, the same libraries were re-sequenced on the HiSeq 2500. 
 Table \@ref(tab:table-compare) presents summary values for the two sets of data.
-Note that many fewer molecules are swapped on HiSeq 2500.
+Note that many fewer molecules are swapped on the HiSeq 2500.
 
 ```{r table-compare}
 h5_files_2500 = dir(paste0(folder_location, "/data/molecule_info/hiseq_2500"), full.names = TRUE)
@@ -1805,7 +1810,7 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
 
 Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
 Thus, we should see no swapping and therefore negligible molecule removal between the two experiments. 
-We use the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on HiSeq 2500) at a later date, termed Experiment 2.
+We use the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment 2.
 The latter dataset has been taken from @bach_differentiation_2017.
 A summary of the two experiments is shown in Table \@ref(tab:load-run2).
 
@@ -1833,7 +1838,7 @@ df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecule
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
 
-Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations).
+Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples, as shown in Table \@ref(fig:load-run2).
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
 ```{r tenx_swap_rate}
@@ -1856,51 +1861,59 @@ rate_2500 <- swapped_2500/sum(reads_2500)
 ```
 
 Using this framework, we can estimate a swapping fraction for this 10X data by considering the fraction of all reads that we deem to have swapped.
-This is probably an underestimate of the swapping fraction, because our labelling of swapped reads does not capture all swaps.
-For example, this includes swaps into the dominant fraction, and also swaps that keep a molecule within a 10X sample (because each 10X sample is made up of four different Illumina sample barcodes).
-On the other hand, this approach counts molecules that have truly appeared by chance in two separate samples, although we have shown that this is very rare.
-Our swap-identification method provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on HiSeq 2500. 
-We once again observe an order of magnitude difference between swapping fractions on each technology.
+Our swap-identification method provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on the HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on the HiSeq 2500. 
+This is comparable to the swapping fraction we estimated for Smart-seq2 data, with a modest discrepency attributable to differences between the assays [@costello_characterization_2017].
+Nonetheless, consistent with our previous results, we observe an order of magnitude difference between swapping fractions on each technology.
 
 # Experimental solutions for barcode swapping
 
-One proposed solution for the problem of swapping are unique-at-both-ends indices. 
-In these experiments, each cell's transcriptome is indexed with a unique barcode at both transcript ends that are never used for any other transcriptomes for the multiplexed set of samples. 
-Therefore a single barcode swap simply moves a sequencing read into empty space, not into another library. This is an effective solution for the multiplexing of a relatively low number of libraries for sequencing (e.g., [Nugen provide sets of 96 pairs of indexes](https://www.nugen.com/content/nugen-introduces-unique-indexing-solutions-illumina’s-high-capacity-sequencing-platforms)).
+One proposed solution for the swapping problem are unique-at-both-ends indices. 
+In these experiments, a cDNA molecule in a given cell's library is indexed with a unique barcode at each end. 
+These barcodes are never reused for any other cell library in the same multiplexed set. 
+A single barcode swap therefore moves a sequencing read into an unused barcode combination, not into another cell library. 
+This is an effective solution for the multiplexing of a relatively low number of libraries for sequencing (e.g., [Nugen provide sets of 96 pairs of indexes](https://www.nugen.com/content/nugen-introduces-unique-indexing-solutions-illumina’s-high-capacity-sequencing-platforms)).
 
 However, for single-cell RNA-seq, it may be desirable to sequence many hundreds of multiplexed samples (i.e., cells) together, particularly as sequencing facilities transition towards the use of higher-throughput machines. 
-Use of unique-at-both-ends indices may not be feasible in these experiments, because of the loss of combinatorial complexity that barcode reuse provides.
-Specifically, sharing barcodes allows for $n\times m$ libraries to be multiplexed, where $n$ and $m$ are the number of row and column barcodes respectively.
-For a unique-at-both-ends approach, only $\frac{n+m}{2}$ libraries can be multiplexed.
-For sharing barcodes on individual 96-well plates, $\frac{96(n+m)}{20}$ libraries can be multiplexed
-The difference in scaling of these values is illustrated in Figure \@ref(fig:scaling) and Figure \@ref(fig:scaling-low).
+Use of unique-at-both-ends indices may not be feasible in these experiments, because of the loss of combinatorial complexity provided by the reuse of barcodes in a multiplexed set of libraries.
+Consider the situation where we have $\zeta$ unique barcode sequences.
+If barcodes are reused between cells in unique combinations, the maximum number of samples that can be multiplexed together is:
+$$\left(\frac{\zeta}{2}\right)^2 \;,$$
+assuming that $\frac{\zeta}{2}$ barcodes are exclusively used for 5' or 3' indexing.
+In contrast, the maximum number of combinations for unique-at-both-ends indexing is:
+$$\frac{\zeta}{2} \;.$$
+Clearly, unique-at-both-ends indexing severely restricts the throughput of multiplexing strategies.
 
-```{r scaling, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. \"Unique barcodes\" indicates unique-at-both-ends indexing. \"Shared barcodes, NxN scheme\" indicates the use of half of the barcode set as \"column\" indices, and the other half as \"row\" indices. \"Shared barcodes, 96 well plates\" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above)."}
+In practice, barcodes are often used in a 96-well plate (of dimension 12$\times$8). 
+For every additional 20 barcodes that are available, 8 are used to index rows (say, 5' indexing), and 12 are used to index columns (3' indexing). 
+Here, the number of possible barcode combinations is:
+$$\frac{8\zeta}{20}\times\frac{12\zeta}{20} = \frac{6\zeta^2}{25}$$
 
-nbc = seq(2, 500, 2)
-pdf = data.frame(barcodes = nbc, unique = nbc/2, shared = (nbc/2)^2)
+Again, this approach allows the multiplexing of very many more samples than unqiue-at-both-ends approaches.
+The difference in scaling of these values is illustrated in Figure \@ref(fig:scaling).
+
+```{r scaling, fig.cap = "Maximum number of libraries that can be multiplexed under different labelling schemes, as a function of the number of available barcodes."}
+
+nbc = seq(2, 200, 2)
+pdf = data.frame(barcodes = nbc, unique = nbc/2, shared = (nbc/2)^2, plate = 6/25*nbc^2)
 
 plot = ggplot(pdf) +
   geom_line(aes(x = barcodes, y = unique, colour = "unq"), lwd = 2) +
   geom_line(aes(x = barcodes, y = shared, colour = "rep"), lwd = 2) +
-  geom_line(data = data.frame(X = seq(0, 500, 20), Y = seq(0, 500, 20) * 96/20), mapping = aes(x = X, y = Y, col = "plate"), lwd = 2) +
+  geom_line(aes(x = barcodes, y = plate, colour = "plate"), lwd = 2) +
   theme_bw() +
   labs(x = "Number of available barcodes", y = "Number of possible multiplexed libraries") +
-  scale_color_manual(values = c("unq" = "coral3", "rep" = "seagreen3", "plate" = "purple"), labels = c("unq" = "Unique barcodes", "rep" = "Shared barcodes,\nNxN scheme", "plate" = "Shared barcodes,\n96-well plates"), name = "") +
+  scale_color_manual(values = c("unq" = "coral3", "rep" = "seagreen3", "plate" = "purple"), labels = c("unq" = "Unique-at-both-ends", "rep" = "Shared barcodes, NxN scheme", "plate" = "Shared barcodes, 96-well plates"), name = "") +
   theme(legend.position = c(0.3, 0.8))
 
 print(plot)
 ```
 
-```{r scaling-low, fig.cap = "Number of libraries that may be multiplexed under different labelling schemes. \"Unique barcodes\" indicates unique-at-both-ends indexing. \"Shared barcodes, NxN scheme\" indicates the use of half of the barcode set as \"column\" indices, and the other half as \"row\" indices. \"Shared barcodes, 96 well plates\" indicates the use of barcodes as in a conventional 96-well plate setup (e.g., see Richard data, above). The scale is cropped to show the number of combinations up to 300 barcodes."}
-print(plot + coord_cartesian(xlim = c(0, 300), ylim = c(0, 5000)) + theme(legend.position = c(0.7, 0.6)))
-```
-
-Use of unique barcodes is particularly problematic for methods such as sci-Seq (@cao_comprehensive_2017), where the reuse of barcodes between cells generates the combinatorial complexity that allows massively high-throughput generation of cell libraries.
+Use of unique-at-both-ends barcoding is particularly problematic for methods such as sci-Seq [@cao_comprehensive_2017], where the reuse of barcodes between cells generates the combinatorial complexity that allows massively high-throughput generation of cell libraries.
 Additionally, the use of droplet-based protocols (e.g. 10X Genomics) is increasingly popular. 
 In these experiments, samples are labelled with a single index, and so are not compatible with the unique-at-both-ends indexing approach.
 
-While we would encourage experimental design that uses unique-at-both-ends indexing where possible, it is clearly the case that it is not a suitable approach for all experiments, and that computational solutions for swapping are therefore important.
+While we would encourage the use of experimental designs with unique-at-both-ends indexing where possible, it is clearly not a suitable approach for all experiments. 
+This motivates our development of computational methods to address barcode swapping, particularly for droplet data.
 
 # Manuscript figure code
 
@@ -1912,9 +1925,8 @@ model = lm(conc_df$swap_rate ~ I(conc_df$bc_mol/conc_df$seq_mol))
 print(summary(model))
 
 
-#*1.1 for the 2500 rate
 
-conc = ggplot(conc_df, aes(x = bc_mol/seq_mol, y= swap_rate * 1.1)) +
+conc = ggplot(conc_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
   geom_smooth(method = "lm", fullrange = TRUE, col = "darkgrey", fill = "grey80") +
   geom_point() + 
   annotate("text", x= 6, y = 0.01, label = paste0("italic(R)^2 == ", format(summary(model)$r.squared, digits = 2)), parse = TRUE, fontface = "bold", size = 7) +
