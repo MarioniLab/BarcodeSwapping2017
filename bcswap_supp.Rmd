@@ -529,13 +529,12 @@ plot_out
 
 These crosshair patterns demonstrate that swapping along rows and columns is the primary mode of read transfer between libraries.
 This supports our assumption that swapping is a rare event.
-In the vast majority of cases, swapping will occur no more than once to the same molecule, restricting the transfer of reads between libraries that already share a single barcode.
+In the vast majority of cases, swapping will occur no more than once to the same molecule, restricting the transfer of reads to libraries that already share a single barcode.
 
 ## Quantifying the swapping fraction
 
 To quantify the swapping fraction, we assume that the HiSeq 2500 data contains negligible amounts of barcode swapping compared to the HiSeq 4000.
 This allows us to treat the HiSeq 2500 data as an unbiased representation of the true expression profile for each cell, unaffected by swapping.
-(Note that we can later correct for this by multiplying our swapping fraction estimates by 1.1, consistent with the HiSeq 2500 swapping fraction estimated in Section 3.5.)
 We applied a model that identifies contributions of different cells in the HiSeq 2500 data to the swapping-affected transcriptomes of the HiSeq 4000 data. 
 Let $Y_{4000}$ denote the $G\times C$ read count matrix for the HiSeq 4000 libraries, where rows are genes (for $G$ total genes) and columns are cells (for $C$ total cells).
 Let $Y_{2500}$ denote the equivalent count matrix for the HiSeq 2500 libraries.
@@ -814,7 +813,7 @@ run_1000 = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split
 
 run_sample = lapply(1:length(swap_split), function(i) get_mixing_matrix(swap_split[[i]], noswap_split[[i]], bc1 = bcs[[i]][[1]], bc2 = bcs[[i]][[2]], constrain = TRUE, n.genes = 1000, sample = 500))
 
-calc_rate = function(mix_mat_list, make.absolute = TRUE){
+calc_rate = function(mix_mat_list){
   
   params = mix_mat_list$params
   beta = mix_mat_list$beta
@@ -825,12 +824,9 @@ calc_rate = function(mix_mat_list, make.absolute = TRUE){
   
   top = sum(mix_mat_list$count_2500 %*% (r0 + r1))
   bottom = sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
+
+  return(top/bottom)
   
-  if(make.absolute){
-    return( (top/bottom) * 1.1)
-  } else {
-    return(top/bottom)
-  }
 }
 
 rate_500 = sapply(run_500, calc_rate)
@@ -861,9 +857,6 @@ We divided this by the total number of reads in the fitted model (i.e., $\sigma(
 $$
 \frac{\sigma(Y_{2500}(R_0 + R_1))}{\sigma(Y_{2500}R)}
 $$
-
-Finally, based on the swapping fraction on HiSeq 2500 being approximately one tenth of the HiSeq 4000 fraction (see Section 3.5), we multiply this estimate by 1.1.
-This converts the swapping fraction from one with respect to HiSeq 2500 to one that is absolute.
 
 Across plates, the mean swapping fraction is `r format(mean(rate_500)*100, digits = 4)` $\pm$ `r format(sqrt(var(rate_500)/length(rate_500))*100, digits = 3)`% (Figure \@ref(fig:plot-contrib)). 
 
@@ -902,7 +895,7 @@ $$
 $$
 
 ```{r rowcol-only}
-calc_rate_rowcol <- function(mix_mat_list, make.absolute = TRUE) {
+calc_rate_rowcol <- function(mix_mat_list) {
   params <- mix_mat_list$params
   beta <- mix_mat_list$beta
   
@@ -913,11 +906,8 @@ calc_rate_rowcol <- function(mix_mat_list, make.absolute = TRUE) {
   top <- sum(mix_mat_list$count_2500 %*% (r1))
   bottom <- sum(mix_mat_list$count_2500 %*% (r0 + r1 + r2))
 
-  if(make.absolute){
-    return( (top/bottom) * 1.1)
-  } else {
-    return(top/bottom)
-  }
+  return(top/bottom)
+  
 }
 
 rate_500_rowcol <- sapply(run_500, calc_rate_rowcol)
