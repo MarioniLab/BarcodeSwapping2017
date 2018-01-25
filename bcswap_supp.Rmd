@@ -643,7 +643,7 @@ We emphasize that the maximum expression value on a plate does not substantially
 This means that we are not simply selecting for genes with high maximum expression.
 Rather, we are identifying genes where the maximum expression value is a clear outlier relative to expression in other cells on the plate.
 
-```{r gene-selection-max, fig.cap="Relationship between the maximum expression and the information score for each gene, using two randomly chosen plates."}
+```{r gene-selection-max, fig.cap="Relationship between the maximum expression and the information score for each gene, using the first two plates in the dataset."}
 vars_1 <- apply(noswap_split[[1]][rowMax(noswap_split[[1]])>500,], 1,  function(x) max(x)/quantile(x, 0.9))
 maxs_1 <- rowMax(noswap_split[[1]][rowMax(noswap_split[[1]])>500,])
 keep_1 <- vars_1 >= vars_1[order(vars_1, decreasing = TRUE)][500]
@@ -1888,7 +1888,7 @@ In contrast, the maximum number of combinations for unique-at-both-ends indexing
 $$\frac{\zeta}{2} \;.$$
 Clearly, unique-at-both-ends indexing severely restricts the throughput of multiplexing strategies.
 
-In practice, barcodes are often used in a 96-well plate (of dimension 12$\times$8). 
+In practice, barcodes are often used in a 96-well plate (of dimension 12 x 8). 
 For every additional 20 barcodes that are available, 8 are used to index rows (say, 5' indexing), and 12 are used to index columns (3' indexing). 
 Here, the number of possible barcode combinations is:
 $$\frac{8\zeta}{20}\times\frac{12\zeta}{20} = \frac{6\zeta^2}{25}$$
