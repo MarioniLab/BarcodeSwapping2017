@@ -82,7 +82,7 @@ Reads labelled with a barcode specific to a given sample may have originated fro
 This phenomenon is particularly relevant for single-cell -omics assays, where a large number of samples (i.e., cells) are necessarily multiplexed together for efficient use of sequencing resources. 
 Our manuscript (_"Detection and removal of barcode swapping in single-cell RNA-seq data"_) quantifies the effect of barcode swapping in a variety of single-cell RNA-seq datasets.
 We also show that swapping can create artefactual cell libraries in droplet scRNA-seq experiments.
-Finally, We have implemented a strategy to eliminate the effects of barcode swapping in droplet-based data without unnecessarily excluding data.
+Finally, we have implemented a strategy to eliminate the effects of barcode swapping in droplet-based datasets without unnecessarily excluding data.
 
 This _Supplementary Materials_ file steps through all the analyses that were performed in the manuscript.
 All code chunks are accessible by clicking on the `Code` buttons below.
@@ -114,10 +114,10 @@ For sequencing, all cell libraries from the two plates were multiplexed.
 
 ```{r richard-schematic, fig.cap="Overview of the experimental design in the Richard dataset. Each position of the plot represents a barcode combination. Each of the orange blocks represents at 96-well plate. One barcode combination (N729,S522) in one of the plates did not contain a cell, but did contain barcodes and spike-in transcripts. Barcode combinations in the grey positions were not used, and thus should not contain sequencing reads."}
 ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
-  geom_tile(aes(fill = expected & empty_well), col = "grey50") +
+  geom_tile(aes(fill = expected | empty_well), col = "grey50") +
   theme(axis.text.x = element_text(angle = 90)) +
   labs(x = "Barcode 1", y="Barcode 2") +
-  scale_fill_manual(values = c("FALSE" = "grey30", "TRUE" = "coral"), name = "", labels = c("Barcode combination\non plate", "Barcode combination\nnot plate"))
+  scale_fill_manual(values = c("FALSE" = "grey30", "TRUE" = "coral"), name = "", labels = c("TRUE" = "Plate of single cells", "FALSE" = "Unused barcode combination"))
 ```
 
 ## Details of data generation
@@ -133,7 +133,7 @@ Equimolar quantities of libraries from each plate were combined for sequencing.
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
 Read mapping was performed using the _Subread_ aligner (v1.5.1) [@liao_subread_2013] to the Ensembl mm10 genome with ERCC92 annotation.
 We used a Phred offset of 33 and only considered uniquely mapped reads, with default values for all other parameters.
-We counted the number of reads mapped to each gene in each cell using the `featureCounts` function [@liao_featurecounts:_2014] in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`, to retain only high-squality alignments).
+We counted the number of reads mapped to each gene in each cell using the `featureCounts` function [@liao_featurecounts:_2014] in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`, to retain only high-quality alignments).
 This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file, or to spike-in transcripts in the Thermo-Fisher ERCC92 GTF (see https://github.com/MarioniLab/CommonResources for details).
 
 ## Examination of the library sizes
@@ -185,7 +185,7 @@ Barcode swapping is the only possible mechanism for obtaining a substantial numb
 (We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space.)
 This provides a point of difference for our experimental design compared to that of @sinha_index_2017.
 
-## Swapping fraction estimation
+## Swapping fraction estimation on the HiSeq 4000
 
 Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ represents a row in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ represents a column ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
 Let $M_{i,j}$ denote the number of seeded cDNA molecules that truly originate from this combination, and let $X_{i,j}$ denote the number of mapped reads.
@@ -326,7 +326,7 @@ Note that we fitted the line in Figure \@ref(fig:correlation)  with an intercept
 The value of the intercept is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)` $\pm$ `r format(coef(summary(mod_mapped))[1,2], digits = 4, nsmall =1)`.
 This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\tilde{X}_{i^*,j^*}$.
 
-## Negative control data with the HiSeq 2500
+## Swapping fraction estimation on the HiSeq 2500
 
 The exact same pool of multiplexed libraries was also sequenced on a HiSeq 2500. 
 This provides a negative control dataset where barcode swapping should not be present (or, at least, present at a lower rate than encountered in the HiSeq 4000).
@@ -829,6 +829,9 @@ calc_rate = function(mix_mat_list){
   return(top/bottom)
   
 }
+
+#Note: this is equivalent to multiplying each of the parameters by 77, 18, and 1 for each of the categories R0, R1, R2
+#sum((run_500[[1]]$params * c(77, 18,1))[c(1:2)] /sum(run_500[[1]]$params * c(77, 18,1)))
 
 rate_500 = sapply(run_500, calc_rate)
 rate_250 = sapply(run_250, calc_rate)
@@ -1488,7 +1491,7 @@ We hypothesise that, due to the low rate of barcode swapping, swapped-in cell li
 As a result, the swapped-in libraries are mostly discarded by cell-calling algorithms that distinguish cell-containing and empty droplets based on their library sizes.
 This suggests that droplet data has an intrinsic robustness to the generation of artefactual cells, at least when samples are of high quality and contain cells of comparable size.
 
-## Artefactual cells due to barcode swapping in compromised samples
+## Artefactual cells appear due to barcode swapping in compromised samples
 
 Here, we describe an experiment where barcode-swapping created severe technical artefacts that confounded downstream analysis.
 In dataset 2 (mouse epithelial cells), the sample labels combine experimental condition (A-D) with biological replicate number (1-2). 
@@ -1571,7 +1574,7 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
 ```
 
-<!-- We have shown that barcode swapping can create severe data artefacts in experimentally compromised samples. **We recommend that a test for the degree of cell barcode sharing between multiplexed droplet-based scRNA-seq samples should be carried out as a standard part of quality control for this type of data.** -->
+
 
 The presence of artifactual cells in this dataset is likely driven by the presence of severely compromised samples containing damaged cells. 
 However, it is possible that the multiplexing of cells of radically different RNA content could present similar problems. 
@@ -1808,6 +1811,8 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
   labs(x = "Sample", y = "Number of called cells")
 ```
 
+### Testing the method on independent experiments
+
 Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
 Thus, we should see no swapping and therefore negligible molecule removal between the two experiments. 
 We use the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment 2.
@@ -1838,7 +1843,7 @@ df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecule
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
 
-Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples, as shown in Table \@ref(fig:load-run2).
+Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples, as shown in Table \@ref(tab:load-run2).
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
 ```{r tenx_swap_rate}
@@ -1888,7 +1893,7 @@ For every additional 20 barcodes that are available, 8 are used to index rows (s
 Here, the number of possible barcode combinations is:
 $$\frac{8\zeta}{20}\times\frac{12\zeta}{20} = \frac{6\zeta^2}{25}$$
 
-Again, this approach allows the multiplexing of very many more samples than unqiue-at-both-ends approaches.
+Again, this approach allows the multiplexing of very many more samples than unique-at-both-ends approaches.
 The difference in scaling of these values is illustrated in Figure \@ref(fig:scaling).
 
 ```{r scaling, fig.cap = "Maximum number of libraries that can be multiplexed under different labelling schemes, as a function of the number of available barcodes."}
