@@ -28,7 +28,7 @@ output:
 bibliography: bcswap_supp.bib
 ---
 <br>
-**The latest version of this document can be found on the [Marioni Lab GitHub page](https://github.com/MarioniLab/BarcodeSwapping2017)**
+**The latest version of this document can be found on the [Marioni Lab GitHub page](https://github.com/MarioniLab/BarcodeSwapping2017). This repository also contains instructions to obtain the raw data required to reproduce the results shown below.**
 
 ```{r packages_data, message=FALSE}
 
