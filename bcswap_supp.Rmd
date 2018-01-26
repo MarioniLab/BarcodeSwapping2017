@@ -4,9 +4,6 @@ author:
 - name: Jonathan A. Griffiths
   affiliation:
   - &cruk Cancer Research UK Cambridge Institute, University of Cambridge, CB2 0RE, United Kingdom
-- name: Aaron T.L. Lun
-  affiliation:
-  - *cruk
 - name: Arianne C. Richard
   affiliation: 
   - *cruk
@@ -14,6 +11,9 @@ author:
 - name: Karsten Bach
   affiliation:
   - Department of Pharmacology, University of Cambridge, CB2 1PD, United Kingdom
+- name: Aaron T.L. Lun
+  affiliation:
+  - *cruk
 - name: John C. Marioni
   affiliation:
   - *cruk
