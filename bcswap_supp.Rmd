@@ -1553,7 +1553,7 @@ This is supported by the excessive sharing of barcodes between the two B samples
 
 Why have these small libraries been called as cells? 
 This is due to CellRanger's cell calling algorithm, which defines cells as "10X barcodes with a total UMI count of >= 10% of the 99th percentile of the expected recovered cells" [@zheng_massively_2017] (this is the case as of Cellranger 2.1.0, the latest version released upon submission of the manuscript). 
-If the 99th percentile UMI count is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping.
+If the 99th percentile UMI count is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping. So, even in the absence swapped molecules, if the 99th percentile value is small, artefactual libraries are still identified as cells.
 
 Finally, not all barcodes from high-quality samples are observed in the poor quality B samples. 
 What may drive a barcode's presence or absence? 
