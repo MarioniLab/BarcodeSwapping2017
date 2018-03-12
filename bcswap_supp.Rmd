@@ -33,22 +33,33 @@ bibliography: bcswap_supp.bib
 
 ```{r packages_data, message=FALSE}
 
+#core plotting functions
 library(ggplot2)
 library(reshape2)
-library(parallel)
-library(Matrix)
-library(pheatmap)
-library(RColorBrewer)
-library(reshape2)
-library(scales)
+library(cowplot)
 library(ggsignif)
 library(viridis)
-library(limSolve)
-library(BiocStyle)
-library(DropletUtils)
+library(pheatmap)
+library(RColorBrewer)
+
+#making the html pretty/convenient
 library(here)
 library(knitr)
-library(cowplot)
+library(BiocStyle)
+
+#other analysis packages
+library(parallel)
+library(Matrix)
+library(reshape2)
+library(scales)
+library(limSolve)
+library(irlba)
+
+#single cell analysis packages
+library(scran)
+library(scater)
+library(Rtsne)
+library(DropletUtils)
 
 folder_location = here()
 
@@ -1494,10 +1505,61 @@ This suggests that droplet data has an intrinsic robustness to the generation of
 
 ## Artefactual cells appear due to barcode swapping in compromised samples
 
-Here, we describe an experiment where barcode-swapping created severe technical artefacts that confounded downstream analysis.
-In dataset 2 (mouse epithelial cells), the sample labels combine experimental condition (A-D) with biological replicate number (1-2). 
-Samples B1 and B2 possess considerably smaller library sizes (Figure \@ref(fig:lib-size)), and share almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
-Accordingly, samples B1 and B2 were excluded from the earlier analyses (Figure \@ref(fig:bad-plot)).
+In one experiment, we sequenced the transcriptomes of cells from four different experimental conditions (A-D), using two biological replicates for each condition (1-2).
+
+Figure \@ref(fig:tsne-4000) shows a t-sne for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline.
+
+```{r tsne-4000, fig.cap = "t-sne of cell transcriptomes from HiSeq 4000 sequencing."}
+counts_4000 = readMM(paste0(folder_location, "/data/bach_counts_4000.mtx"))
+bc_4000 = read.table(paste0(folder_location, "/data/bach_barcodes_4000.tsv"), stringsAsFactors = FALSE)[,1]
+counts_2500 = readMM(paste0(folder_location, "/data/bach_counts_2500.mtx"))
+bc_2500 = read.table(paste0(folder_location, "/data/bach_barcodes_2500.tsv"), stringsAsFactors = FALSE)[,1]
+genes = read.table(paste0(folder_location, "/data/bach_genes.tsv"), stringsAsFactors = FALSE)
+
+bc2df = function(bc){
+  spt = strsplit(bc, "-", fixed = TRUE)
+  df = data.frame(barcode = sapply(spt, function(x) x[1]),
+                  number = sapply(spt, function(x) x[2]))
+  
+  svec = c("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2")
+  #manual tweaking, as CellRanger names don't map to the right samples
+  names(svec) = c(4, 2, 6, 5, 1, 7, 8, 3)
+  df$sample = svec[match(df$number, names(svec))]
+  return(df)
+}
+
+bc_4000 = bc2df(bc_4000)
+bc_2500 = bc2df(bc_2500)
+
+sce_4000 = SingleCellExperiment(assays = list(counts = as(counts_4000, "dgCMatrix")))
+rownames(sce_4000) = genes[,1]
+qc = quickCluster(sce_4000, min.size = 200, method = "igraph")
+sce_4000 = computeSumFactors(sce_4000, clusters = qc, positive = TRUE)
+remove = which(sizeFactors(sce_4000)<=0)
+sce_4000 = normalise(sce_4000[, -remove])
+bc_4000 = bc_4000[-remove,]
+
+trend = trendVar(sce_4000, use.spikes = FALSE, loess.args = list(span = 0.05))
+decomp = decomposeVar(sce_4000, trend)
+decomp = decomp[order(decomp$p.value),]
+# hvgs_4000 = rownames(decomp[1:2000,])
+hvgs_4000 = rownames(decomp)[decomp$FDR < 0.01]
+
+pca_4000 = prcomp_irlba(t(logcounts(sce_4000)[rownames(sce_4000) %in% hvgs_4000,]), n = 50)
+tsne_4000= Rtsne(pca_4000$x, pca = FALSE)
+
+rdm = sample(nrow(pca_4000$x), nrow(pca_4000$x))
+ggplot(as.data.frame(tsne_4000$Y)[rdm,], aes(x = V1, y = V2, col = bc_4000$sample[rdm])) +
+  geom_point(size = 0.6) +
+  scale_colour_brewer(palette = "Paired", name = "Sample") +
+  labs(x = "tsne 1", y = "tsne 2")
+
+```
+
+This appears to show unique populations of cells for each sample.
+ 
+However, upon closer inspection we found that samples B1 and B2 possessed considerably smaller library sizes (Figure \@ref(fig:lib-size)), and shared almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
+(Accordingly, samples B1 and B2 were excluded from the earlier analyses (Figure \@ref(fig:bad-plot)).)
 
 ```{r lib-size, fig.cap = "Distribution of UMI count across all cell barcodes in each 10X sample. Only cell barcodes that were detected by CellRanger as cell-containing droplets are shown."}
 bc_tab <- table(samp2_all$barcode)
@@ -1553,7 +1615,38 @@ This is supported by the excessive sharing of barcodes between the two B samples
 
 Why have these small libraries been called as cells? 
 This is due to CellRanger's cell calling algorithm, which defines cells as "10X barcodes with a total UMI count of >= 10% of the 99th percentile of the expected recovered cells" [@zheng_massively_2017] (this is the case as of Cellranger 2.1.0, the latest version released upon submission of the manuscript). 
-If the 99th percentile UMI count is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping. So, even in the absence swapped molecules, if the 99th percentile value is small, artefactual libraries are still identified as cells.
+If the 99th percentile UMI count is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping. 
+So, even in the absence swapped molecules, if the 99th percentile value is small, artefactual libraries are still identified as cells. 
+This is illustrated in Figure \@ref(fig:cellranger-call), which demonstrates the extremely rapid dropoff in library size for sample B1.
+Due to the rapid fall in UMI count in the B samples, it is likely that the 99th percentile value is affected.
+
+```{r cellranger-call, fig.wide = TRUE, fig.cap = "Sample B1 contains smaller cell libraries, and a more rapid decrease of library size. As a result, CellRanger is more prone to identifying small, artefactual cell libraries."}
+
+libs = samp2_all$UmiSums[samp2_all$SampleID == "B1"]
+libs = libs[order(libs, decreasing = TRUE)]
+
+
+libs_good = samp2_all$UmiSums[samp2_all$SampleID == "C2"]
+libs_good = libs_good[order(libs_good, decreasing = TRUE)]
+
+cr_fail = ggplot(mapping = aes(y = libs, x = 1:length(libs))) +
+  geom_line() +
+  scale_y_log10() +
+  coord_cartesian(xlim = c(0, 500), ylim = c(800, 80000)) +
+  labs(x = "Cell", y=  "Number of UMIs") +
+  ggtitle("Sample B1")
+
+cr_pass = ggplot(mapping = aes(y = libs_good, x = 1:length(libs_good))) +
+  geom_line() +
+  scale_y_log10() +
+  coord_cartesian(xlim = c(0, 500), ylim = c(800, 80000)) +
+  labs(x = "Cell", y=  "Number of UMIs") +
+  ggtitle("Sample C2")
+
+plot_grid(cr_fail, cr_pass, ncol = 2)
+
+
+```
 
 Finally, not all barcodes from high-quality samples are observed in the poor quality B samples. 
 What may drive a barcode's presence or absence? 
@@ -1575,9 +1668,60 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
 ```
 
+To confirm if barcode swapping was driving this behaviour, we resequenced the libraries on HiSeq 2500.
+Very many cells from samples B1 and B2 were called only in the HiSeq 4000 data, as shown in Figure \@ref(fig:compare-4000-2500).
+
+```{r compare-4000-2500, message = FALSE, fig.wide = TRUE, fig.cap = "Resequencing the samples on HiSeq 2500 resulted in a considerable fall in cell number for the potentially compromised B1 and B2 samples."}
+
+sce_2500 = SingleCellExperiment(assays = list(counts = as(counts_2500, "dgCMatrix")))
+rownames(sce_2500) = genes[,1]
+qc = quickCluster(sce_2500, min.size = 200, method = "igraph")
+sce_2500 = computeSumFactors(sce_2500, clusters = qc, positive = TRUE)
+remove = which(sizeFactors(sce_2500)<=0)
+sce_2500 = normalise(sce_2500[, -remove])
+bc_2500 = bc_2500[-remove,]
 
 
-The presence of artifactual cells in this dataset is likely driven by the presence of severely compromised samples containing damaged cells. 
+
+big_bc = data.frame(sample = unique(bc_4000$sample)[order(unique(bc_4000$sample))], 
+                    hs4000 = as.vector(table(bc_4000$sample)), 
+                    hs2500 = as.vector(table(bc_2500$sample)))
+
+big_bc = melt(big_bc)
+
+ggplot(big_bc, aes(x = sample, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("royalblue", "skyblue"), labels = c("HiSeq 4000", "HiSeq 2500"), name = "") +
+  labs(x = "Sample", y= "Number of cells called (CellRanger)")
+
+
+```
+
+A t-sne of the transcriptomes in this HiSeq 2500 dataset is shown in Figure \@ref(fig:tsne-2500).
+
+```{r tsne-2500}
+
+
+
+trend = trendVar(sce_2500, use.spikes = FALSE, loess.args = list(span = 0.05))
+decomp = decomposeVar(sce_2500, trend)
+decomp = decomp[order(decomp$p.value),]
+# hvgs_2500 = rownames(decomp[1:2000,])
+hvgs_2500 = rownames(decomp)[decomp$FDR < 0.01]
+
+pca_2500 = prcomp_irlba(t(logcounts(sce_2500)[rownames(sce_2500) %in% hvgs_2500,]), n = 50)
+tsne_2500= Rtsne(pca_2500$x, pca = FALSE)
+
+rdm = sample(nrow(pca_2500$x), nrow(pca_2500$x))
+ggplot(as.data.frame(tsne_2500$Y)[rdm,], aes(x = V1, y = V2, col = bc_2500$sample[rdm])) +
+  geom_point(size = 0.6) +
+  scale_colour_brewer(palette = "Paired", name = "Sample") +
+  labs(x = "tsne 1", y = "tsne 2")
+
+```
+
+Although cells are still called in these samples, they likely still derive from the 99th percentile calling strategy described above (Figure \@ref(fig:cellranger-call))
+
 However, it is possible that the multiplexing of cells of radically different RNA content could present similar problems. 
 We advise caution when combining experimental designs of this nature with the HiSeq 4000 (or other patterned flow-cell) sequencing.
 
@@ -1598,15 +1742,15 @@ Each sample consists of an equal number of cells $n$, whose barcodes are drawn a
 Barcodes are drawn with replacement, as the pool of 10X gel beads does not contain exactly one of each barcode.
 Drawing of barcodes is independent between samples, assuming no creation of artefactual cells due to swapping.
 Barcodes are then marked for exclusion if they are observed in more than one of the eight samples. 
-For each $n$, 100,000 simulations were run. 
+For each $n$, we consider the mean of 100 simulations. 
 
-Figure \@ref(fig:sim-removals) shows the rate of cell removal for different values of $n$.
-The expected rate of removal is low (< 5%) at low $n$ corresponding to a small experiment (< 4,000 cells per sample).
+Figure \@ref(fig:sim-removals) shows the rate of cell removal for different values of $n$, and different numbers of multiplexed samples.
+The expected rate of removal is low (< 5%) at low $n$ with few samples, corresponding to a small experiment.
 In such cases, cell exclusion is a simple and effective strategy for removing swapping artifacts without discarding much data.
-However, it is not suitable for datasets with many ($n > 10000$) cells per sample, where the expected rate of removal exceeds 10%.
-Similarly, it should not be used in cases where many samples are multiplexed for sequencing.
+However, it is not suitable for datasets with many ($n > 10000$) cells per sample, where the expected rate of removal rapidly increases.
+Similarly, it should not be used in cases where many samples are multiplexed for sequencing, which will also inflate the exclusion rate.
 
-```{r sim-removals, fig.cap = "Percentage of cell barcodes that are incorrectly discarded by our cell exclusion approach in the absence of barcode swapping. This is based on simulated data for an experiment containing 8 multiplexed 10X samples with varying numbers of cells."}
+```{r sim-removals, fig.cap = "Percentage of cell barcodes that are incorrectly discarded by a cell exclusion approach, irrespective of barcode swapping. This is based on simulated data for an experiment containing either 5, 15, or 30 multiplexed 10X samples each containing the same number of cells. The real exclusion rate observed would likely be in excess of these values, as artefactually generated cells are not considered here."}
 do_sim_remove <- function(sample_size = 10000, n.samples = 8, n.barcodes = 737280){
   samples <- sapply(1:n.samples, function(x) sample(x = n.barcodes, size = sample_size, replace = TRUE))
   dups <- samples[base::duplicated(as.numeric(samples))]
@@ -1614,19 +1758,31 @@ do_sim_remove <- function(sample_size = 10000, n.samples = 8, n.barcodes = 73728
   return(removal_rate)
 }
 
-sizes <- c(1000, 2000, 4000, 8000, 12000, 24000)
+sizes <- seq(1000, 26000, 3000)
+samples <- c(5, 15, 30)
 nsim <- 100
 
-sim_results <- lapply(sizes, function(x) sapply(1:nsim, function(y) do_sim_remove(sample_size = x, n.samples = 8)))
-size_column <- factor(rep(sizes, nsim), levels = sizes, ordered = TRUE)
-plot_df <- data.frame(rate = unlist(sim_results),
-                     size = size_column[order(size_column)])
+sim_results <- sapply(samples, function(samp){
+  sapply(sizes, function(size) mean(sapply(1:nsim, function(y) do_sim_remove(sample_size = size, n.samples = samp))))
+})
 
-ggplot(plot_df, mapping = aes(x = size, y = rate)) +
-  geom_boxplot() +
-  labs(x= "Cells per sample", y = "Removal rate") +
+colnames(sim_results) <- samples
+rownames(sim_results) <- sizes
+
+plot_df <- melt(sim_results)
+names(plot_df) = c("cells", "samples", "excl")
+
+
+ggplot(plot_df, mapping = aes(x = cells, y = excl, col = factor(samples))) +
+  geom_point() +
+  geom_line() +
+  labs(x= "Cells per sample", y = "Removal rate (ignoring swapping artefacts)") +
   theme_bw() +
-  scale_y_continuous(breaks = seq(0, 0.2, 0.05), labels = paste0(seq(0, 20, 5), "%"))
+  scale_y_continuous(breaks = seq(0, 0.6, 0.1), labels = paste0(seq(0, 60, 10), "%")) +
+  scale_colour_brewer(palette = "Accent", name = "Multiplexed\nsamples") +
+  theme(legend.position = c(0.15, 0.8),
+        legend.background = element_rect(colour = "black"),
+        legend.text = element_text())
 ```
 
 ## Molecule exclusion
@@ -1748,6 +1904,7 @@ To test the effect of molecule exclusion on the data, we called cells from the p
 If we successfully removed swapped reads, we should eliminate the artefactual cells that we identified in Samples B1 and B2 above (see section 4.4, **Artefactual cells due to barcode swapping in compromised samples**). 
 We used the `emptyDrops` function from the `r Githubpkg("MarioniLab/DropletUtils")` package to detect cells, specifiying an FDR threshold of 1% and a minimum library size of 1000 molecules. 
 This method tests whether the expression profile for a cell barcode is significantly different from the pool of background RNA, to distinguish cell-containing and empty droplets.
+Importantly, this method will not be affected by the 99th percentile effects described in Figure \@ref(fig:cellranger-call).
 The results of cell calling are shown in Table \@ref(tab:call-cells) and visualized in Figure \@ref(fig:call-cells).
 
 ```{r call-cells, message = FALSE, fig.cap = "Number of cells called in each sample of dataset 2 (sequenced on the HiSeq 4000) before and after swapped molecule removal. Note that the number of called cells is different to those shown earlier in this document, as this figure uses emptyDrops while the earlier figures use the CellRanger algorithm.", warning = FALSE}
@@ -1995,7 +2152,7 @@ cells_df = melt(cellcall)
 cells = ggplot(cells_df, aes(x = sample, fill = variable, y = value)) +
   geom_bar(stat = "identity", position = "dodge") +
   theme_bw() +
-  scale_fill_manual(values = c("#665178", "#A9CDC3"), name = "", label = c("All molecules", "Swapped molecules\nremoved")) +
+  scale_fill_manual(values = c("#665178", "#A9CDC3"), name = "", label = c("Before correction", "After correction")) +
   labs(x = "Sample", y = "# cells called") +
   theme(legend.position = c(0.3, 0.8),
         legend.title = element_blank(),
