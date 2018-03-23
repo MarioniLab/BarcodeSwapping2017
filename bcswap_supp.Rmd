@@ -37,9 +37,7 @@ bibliography: bcswap_supp.bib
 library(ggplot2)
 library(reshape2)
 library(cowplot)
-library(ggsignif)
 library(viridis)
-library(pheatmap)
 library(RColorBrewer)
 
 #making the html pretty/convenient
@@ -60,6 +58,7 @@ library(scran)
 library(scater)
 library(Rtsne)
 library(DropletUtils)
+library(igraph)
 
 folder_location = here()
 
@@ -125,11 +124,15 @@ The barcodes used for each plate are from mutually exclusive sets - any barcode 
 For sequencing, all cell libraries from the two plates were multiplexed. 
 
 ```{r richard-schematic, fig.cap="Overview of the experimental design in the Richard dataset. Each position of the plot represents a barcode combination. Each of the orange blocks represents at 96-well plate. One barcode combination (N729,S522) in one of the plates did not contain a cell, but did contain barcodes and spike-in transcripts. Barcode combinations in the grey positions were not used, and thus should not contain sequencing reads."}
-ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
-  geom_tile(aes(fill = expected | empty_well), col = "grey50") +
-  theme(axis.text.x = element_text(angle = 90)) +
+richard_design = ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
+  geom_tile(aes(fill = expected | empty_well)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.line = element_blank(),
+        axis.ticks = element_blank()) +
   labs(x = "Barcode 1", y="Barcode 2") +
-  scale_fill_manual(values = c("FALSE" = "grey30", "TRUE" = "coral"), name = "", labels = c("TRUE" = "Plate of single cells", "FALSE" = "Unused barcode combination"))
+  scale_fill_manual(values = c("FALSE" = "grey30", "TRUE" = "steelblue1"), name = "", labels = c("TRUE" = "Plate of single cells", "FALSE" = "Unused barcode combination"))
+
+richard_design
 ```
 
 ## Details of data generation
@@ -169,7 +172,7 @@ medfrac.all <- median(libs$reads[!libs$expected])/median(libs$reads[libs$expecte
 totfrac.all <- sum(libs$reads[!libs$expected])/sum(libs$reads[libs$expected])
 ```
 
-The distribution of total number of mapped reads (i.e., library sizes) for all combinations is shown in Figure \@ref(fig:richard-boxplot). 
+The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot) and Figure \@ref(fig:richard-density). 
 The impossible combinations have a median mapped-read library size that is `r format(medfrac.mapped*100, digits = 2)`% of the median size of the expected combinations. 
 The total number of mapped reads assigned to impossible combinations is `r format(totfrac.mapped*100, digits = 2)`% of that assigned to expected combinations. 
 Note that the empty well is still considered as an expected barcode combination due to the presence of ERCC spike-in transcripts.
@@ -183,6 +186,20 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
   theme_bw() +
   scale_x_discrete(labels = c("\"Impossible\" barcode\ncombination", "Expected barcode\ncombination"), name = "") +
   scale_fill_manual(name = "Read type", values = c("royalblue2","springgreen3"), labels = c("All reads", "Mappable"))
+```
+
+```{r richard-density}
+
+richard_density = ggplot(data = pdf, mapping = aes(fill = expected, x = value)) +
+  geom_density() +
+  scale_x_log10(breaks = 10^(seq(3,7)), labels = c("1,000", "10,000", "100,000", "1,000,000", "10,000,000")) +
+  labs(x = "Library size", y = "Density") +
+  theme_cowplot() +
+  scale_fill_manual(name = "Library type", values = c("grey30","steelblue1"), labels = c("\"Impossible\" barcode combination", "Real cell library")) +
+  theme(legend.position = c(0.45, 0.9), legend.title = element_blank())
+
+richard_density
+
 ```
 
 We focused on mapped reads as these are most relevant to downstream analyses.
@@ -213,18 +230,36 @@ For that example, the combination `N719` and `S505` (red position) would receive
 is_target <- libs$bc1 == "N719" & libs$bc2 == "S505"
 avail <- (libs$bc1 == "N719" | libs$bc2 == "S505") & libs$expected
 
-schem_cols = rep("black", nrow(libs))
-schem_cols[libs$expected] = "grey40"
-schem_cols[is_target] = "indianred"
-schem_cols[avail] = "cornflowerblue"
+schem_cols = rep("snow2", nrow(libs))
+schem_cols[libs$expected] = "grey50"
+schem_cols[is_target] = "firebrick3"
+schem_cols[avail] = "darkgoldenrod3"
 col_index = unique(schem_cols); names(col_index) = col_index
 
-ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc1, y = bc2)) +
+richard_trend_inset = ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = as.character(cols))) +
   scale_fill_manual(values = col_index) +
   theme(legend.position = "none") +
-  theme(axis.text.x = element_text(angle = 90)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
   labs(x = "Barcode 1", y = "Barcode 2")
+
+richard_trend_inset_notext = ggplot(data.frame(bc1 = libs$bc1, bc2 = libs$bc2, cols = schem_cols), aes(x = bc1, y = bc2)) +
+  geom_tile(aes(fill = as.character(cols))) +
+  scale_fill_manual(values = col_index) +
+  theme(legend.position = "none") +
+  theme(axis.text = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  labs(x = "Barcode 1", y = "Barcode 2")
+
+
+
+
+richard_trend_inset
 ```
 
 Let $\tau$ be the conversion rate of seeded cDNA molecules to mapped reads in the same cell library.
@@ -269,7 +304,7 @@ df$tot = df$col + df$row
 mod_mapped = lm(df$mapped ~ df$tot)
 
 
-ggplot(df, aes(x = tot, y = mapped)) +
+richard_trend = ggplot(df, aes(x = tot, y = mapped)) +
   geom_point(col = "grey50") +
   geom_smooth(method = "lm", se = FALSE, col = "black", formula = y ~ x) +
   # scale_x_log10() + scale_y_log10() +
@@ -280,7 +315,9 @@ ggplot(df, aes(x = tot, y = mapped)) +
   theme(axis.text = element_text(face = "bold", size = 11), 
        axis.title.y = element_text(size = 13, face = "bold"), 
        axis.title.x = element_text(size = 13, face = "bold")) +
-  annotate("text", x = 5500000, y = 8000, label = paste0("italic(R)^2 == ", format(summary(mod_mapped)$r.squared, digits = 2)), parse = TRUE, size = 9)
+  annotate("text", x = 6e6, y = 8000, label = paste0("italic(R)^2 == ", format(summary(mod_mapped)$r.squared, digits = 2)), parse = TRUE, fontface = "bold", size = 7)
+
+richard_trend
 
 #retain for later use
 df_4000 = df
@@ -1507,9 +1544,9 @@ This suggests that droplet data has an intrinsic robustness to the generation of
 
 In one experiment, we sequenced the transcriptomes of cells from four different experimental conditions (A-D), using two biological replicates for each condition (1-2).
 
-Figure \@ref(fig:tsne-4000) shows a t-sne for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline.
+Figure \@ref(fig:tsne-4000) shows a t-sne for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph (considering 10 nearest neighbours per cell).
 
-```{r tsne-4000, fig.cap = "t-sne of cell transcriptomes from HiSeq 4000 sequencing."}
+```{r tsne-4000, fig.cap = "t-SNE of cell transcriptomes from HiSeq 4000 sequencing. Cells are coloured by sample and cluster.", fig.wide = TRUE, fig.height = 10}
 counts_4000 = readMM(paste0(folder_location, "/data/bach_counts_4000.mtx"))
 bc_4000 = read.table(paste0(folder_location, "/data/bach_barcodes_4000.tsv"), stringsAsFactors = FALSE)[,1]
 counts_2500 = readMM(paste0(folder_location, "/data/bach_counts_2500.mtx"))
@@ -1545,15 +1582,52 @@ decomp = decomp[order(decomp$p.value),]
 # hvgs_4000 = rownames(decomp[1:2000,])
 hvgs_4000 = rownames(decomp)[decomp$FDR < 0.01]
 
+set.seed(42)
 pca_4000 = prcomp_irlba(t(logcounts(sce_4000)[rownames(sce_4000) %in% hvgs_4000,]), n = 50)
 tsne_4000= Rtsne(pca_4000$x, pca = FALSE)
 
-rdm = sample(nrow(pca_4000$x), nrow(pca_4000$x))
-ggplot(as.data.frame(tsne_4000$Y)[rdm,], aes(x = V1, y = V2, col = bc_4000$sample[rdm])) +
+graph = buildSNNGraph(sce_4000, pc.approx = TRUE, subset.row = rownames(sce_4000) %in% hvgs_4000)
+clusts = as.numeric(membership(cluster_louvain(graph)))
+
+rdm_tsne = sample(nrow(pca_4000$x), nrow(pca_4000$x))
+
+fig2c = ggplot(as.data.frame(tsne_4000$Y)[rdm_tsne,], aes(x = V1, y = V2, col = bc_4000$sample[rdm_tsne])) +
   geom_point(size = 0.6) +
   scale_colour_brewer(palette = "Paired", name = "Sample") +
-  labs(x = "tsne 1", y = "tsne 2")
+  labs(x = "t-SNE 1", y = "t-SNE 2") +
+  theme(legend.position = c(0.8, 0.28),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = 1),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_text(face = "bold", size = 15) ) +
+  guides(colour = guide_legend(override.aes = list(size=3, 
+                                                         alpha = 1)))
 
+
+scale_colour_big <- function(...){
+  library(scales)
+  discrete_scale("colour", "Publication",
+                 manual_pal(values = c(
+                   "#000000", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059",
+                   "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87")), ...)
+}
+
+
+fig_clusts = ggplot(as.data.frame(tsne_4000$Y)[rdm_tsne,], aes(x = V1, y = V2, col = factor(clusts)[rdm_tsne])) +
+  geom_point(size = 0.6) +
+  scale_colour_big(name = "Cluster") +
+  labs(x = "t-SNE 1", y = "t-SNE 2") +
+  theme(legend.position = c(0.8, 0.28),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = 1),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_text(face = "bold", size = 15) ) +
+  guides(colour = guide_legend(override.aes = list(size=3, 
+                                                         alpha = 1)))
+
+new_theme = theme(legend.position = "left", legend.background = element_blank())
+
+plot_grid(fig2c + new_theme, fig_clusts + new_theme, nrow = 2)
 ```
 
 This appears to show unique populations of cells for each sample.
@@ -1564,14 +1638,14 @@ However, upon closer inspection we found that samples B1 and B2 possessed consid
 ```{r lib-size, fig.cap = "Distribution of UMI count across all cell barcodes in each 10X sample. Only cell barcodes that were detected by CellRanger as cell-containing droplets are shown."}
 bc_tab <- table(samp2_all$barcode)
 
-ggplot(samp2_all, aes(x = factor(SampleID), y = UmiSums, fill = substr(SampleID, 1, 1))) +
+ggplot(samp2_all, aes(x = factor(SampleID), y = UmiSums, fill = substr(SampleID, 1, 2))) +
   geom_violin() +
   scale_y_log10(labels = c("1,000", "10,000", "100,000"), breaks = 10^(3:5)) +
   theme_bw() +
   theme(legend.position = "none", panel.grid.minor.x = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.y = element_blank(), 
         axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15)) +
   labs(x = "", y = "Number of UMIs") +
-  scale_fill_brewer(palette = "Set2")
+  scale_fill_brewer(palette = "Paired")
 
 samp2_all$n <- sapply(samp2_all$barcode, function(x) bc_tab[x])
 samp2_all$n_cut <-  samp2_all$n>1 +1
@@ -1671,7 +1745,7 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
 To confirm if barcode swapping was driving this behaviour, we resequenced the libraries on HiSeq 2500.
 Very many cells from samples B1 and B2 were called only in the HiSeq 4000 data, as shown in Figure \@ref(fig:compare-4000-2500).
 
-```{r compare-4000-2500, message = FALSE, fig.wide = TRUE, fig.cap = "Resequencing the samples on HiSeq 2500 resulted in a considerable fall in cell number for the potentially compromised B1 and B2 samples."}
+```{r compare-4000-2500, message = FALSE, fig.wide = TRUE, fig.cap = "Resequencing the samples on HiSeq 2500 resulted in a considerable fall in cell number for the potentially compromised B1 and B2 samples. Cell numbers for normal samples are only lowly affected."}
 
 sce_2500 = SingleCellExperiment(assays = list(counts = as(counts_2500, "dgCMatrix")))
 rownames(sce_2500) = genes[,1]
@@ -1773,16 +1847,17 @@ plot_df <- melt(sim_results)
 names(plot_df) = c("cells", "samples", "excl")
 
 
-ggplot(plot_df, mapping = aes(x = cells, y = excl, col = factor(samples))) +
-  geom_point() +
-  geom_line() +
+cell_exclusion = ggplot(plot_df, mapping = aes(x = cells, y = excl, col = factor(samples))) +
+  geom_point(size = 2) +
+  geom_line(lwd = 1) +
   labs(x= "Cells per sample", y = "Removal rate (ignoring swapping artefacts)") +
-  theme_bw() +
   scale_y_continuous(breaks = seq(0, 0.6, 0.1), labels = paste0(seq(0, 60, 10), "%")) +
-  scale_colour_brewer(palette = "Accent", name = "Multiplexed\nsamples") +
+  scale_colour_brewer(palette = "Set1", name = "# multiplexed\nsamples") +
   theme(legend.position = c(0.15, 0.8),
         legend.background = element_rect(colour = "black"),
         legend.text = element_text())
+
+cell_exclusion
 ```
 
 ## Molecule exclusion
@@ -1931,11 +2006,15 @@ tab <- data.frame(sample = sample_map,
 cellcall <- tab
 kable(tab, row.names = FALSE, col.names = c("Sample", "Cells called (all molecules)", "Cells called (unswapped molecules)"), caption = "Number of cells called before and after swapped molecule processing.")
 
-ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
+swapped_calls = ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
   geom_bar(stat = "identity", position = "dodge") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Set2", name = "", label = c("Raw counts", "Unswapped\ncounts")) +
-  labs(x = "Sample", y = "Number of called cells")
+  scale_fill_manual(values= c("grey30", "steelblue1"), label = c("Before correction", "After correction")) +
+  labs(x = "Sample", y = "Number of called cells") +
+  theme(legend.position = c(0.2, 0.8),
+        legend.background = element_rect(color = "black", linetype = 1, size = 1),
+        legend.title = element_blank())
+
+swapped_calls
 
 n_change <- sum(tab$cells_pre[!grepl("B", tab$sample)] - tab$cells_post[!grepl("B", tab$sample)])
 n_healthy <- sum(tab$cells_pre[!grepl("B", tab$sample)])
@@ -1995,8 +2074,8 @@ swapped_expt2 <- sum(Matrix::rowSums(present_expt2)>1)
 swapped_both <- Matrix::rowSums(present_expt1) > 0 & Matrix::rowSums(present_expt2) > 0
 
 df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecules", "Swapped fraction"),
-                 "Experiment 1" = c(n_mol_expt1, swapped_expt1, format(swapped_expt1/n_mol_expt1, digits = 3)),
-                 "Experiment 2" = c(n_mol_expt2, swapped_expt2, format(swapped_expt2/n_mol_expt2, digits = 3)))
+                 "Experiment 1" = c(n_mol_expt1, swapped_expt1, paste0(format(swapped_expt1/n_mol_expt1 * 100, digits = 3), "%")),
+                 "Experiment 2" = c(n_mol_expt2, swapped_expt2, paste0(format(swapped_expt2/n_mol_expt2 * 100, digits = 3), "%")))
 
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
@@ -2027,6 +2106,16 @@ Using this framework, we can estimate a swapping fraction for this 10X data by c
 Our swap-identification method provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on the HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on the HiSeq 2500. 
 This is comparable to the swapping fraction we estimated for Smart-seq2 data, with a modest discrepency attributable to differences between the assays [@costello_characterization_2017].
 Nonetheless, consistent with our previous results, we observe an order of magnitude difference between swapping fractions on each technology.
+
+Note that this swapped fraction is harder to interpret than the fractions for plate based data for a number of reasons:
+
+* Interpretation of the effects of a certain swapping fraction is more complicated for droplet experiments, as a swapped read does not necessarily find itself in the library of another cell.
+
+* The 10X swapped fraction estimate relies on our sample-of-origin identification procedure (i.e. fraction of reads $\geq$ 80\%). Molecules without a clear sample-of-origin are all considered to be swapped, which yields inaccurate estimates of the swapped fraction.
+
+* Our method effectively removes swapped molecules from droplet data without knowledge of the swapping rate. No such solution exists for plate-based data, which means that an understanding of experimental swapping fractions is considerably more important in this context.
+
+* Each 10X sample is  actually labelled by a mixture of four sample barcodes. We have only considered swapping between samples, not the swapping of individual barcodes. This is therefore not an estimate of the molecular swapping rate
 
 # Experimental solutions for barcode swapping
 
@@ -2078,107 +2167,247 @@ In these experiments, samples are labelled with a single index, and so are not c
 While we would encourage the use of experimental designs with unique-at-both-ends indexing where possible, it is clearly not a suitable approach for all experiments. 
 This motivates our development of computational methods to address barcode swapping, particularly for droplet data.
 
-# Manuscript figure code
+# Manuscript figures
 
-Below is the code used to generate the figures used in the manuscript.
+Larger versions of the figures used in the manuscript that were generated using R are present below.
 
 ```{r figure, warning = FALSE}
 
+theme_figure = theme(axis.text.y = element_text(size = 10, face = "bold", colour = "black"), 
+        axis.text.x = element_text(size = 12, face = "bold", colour = "black"), 
+        axis.title = element_text(face = "bold", size = 15))
+
+
+#1A
+#Schematic of swapping
+```
+**Figure 2a**
+```{r fig2a}
+ 
+fig2a = richard_design + theme(legend.position = "none", 
+                              axis.text = element_text(size = 8, 
+                                                       face = "bold", 
+                                                       colour = "black"),
+                              axis.title = element_text(face = "bold", size = 12))
+
+fig2a
+
+```
+
+```{r fig2b}
+
+fig2b =  richard_density + theme(legend.position = "none") + theme_figure
+                            
+fig2b
+
+```
+
+**Figure 2b**
+
+```{r fig2c}
+
+
+y1 = mod_mapped$coefficients[1] + mod_mapped$coefficients[2] * 13e6
+y2 = mod_mapped$coefficients[1] + mod_mapped$coefficients[2] * 15e6
+
+fig2c = richard_trend + 
+              theme_figure +
+              theme(panel.grid = element_blank(),
+                    axis.text = element_text(size = 12, face = "bold", colour = "black")) +
+              # geom_segment(mapping = aes(x = c(13e6, 15e6),
+              #                            xend = c(15e6, 15e6),
+              #                            y = c(y1, y1),
+              #                            yend = c(y1, y2)),
+              #              col = "grey30",
+              #              lwd= 1,
+              #              lty = "dashed",
+              #              data = data.frame()) +
+              labs(x = "Available swapping reads", y = "Observed swapped reads")
+
+fig2c_sub = richard_trend_inset_notext
+
+
+fig2c
+```
+
+**Figure 2c**
+```{r fig2d}
+
+
 model = lm(conc_df$swap_rate ~ I(conc_df$bc_mol/conc_df$seq_mol))
-print(summary(model))
 
 
 
-conc = ggplot(conc_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
+fig2d = ggplot(conc_df, aes(x = bc_mol/seq_mol, y= swap_rate)) +
   geom_smooth(method = "lm", fullrange = TRUE, col = "darkgrey", fill = "grey80") +
   geom_point() + 
   annotate("text", x= 6, y = 0.01, label = paste0("italic(R)^2 == ", format(summary(model)$r.squared, digits = 2)), parse = TRUE, fontface = "bold", size = 7) +
   theme_bw() +
   scale_x_continuous(name = "Free barcode:Sequenced cDNA ratio") +
-  scale_y_continuous(name = "Estimated swapping fraction", breaks = c(seq(0, 0.08, 0.02)), labels = paste0(seq(0,8,2), "%"), limits = c(-0.0, 0.09)) +
+  scale_y_continuous(name = "Estimated swapped fraction", breaks = c(seq(0, 0.08, 0.02)), labels = paste0(seq(0,8,2), "%"), limits = c(-0.0, 0.09)) +
   theme(panel.grid = element_blank(),
         axis.title = element_text(face = "bold", size = 14),
         axis.text = element_text(face = "bold", size = 10, colour = "black"))
 
-print(conc)
-
-
-
-#get library size
-get.libsizes = function(expr.matrix){
-  
-  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
-  
-  test = test[!is.na(test$FDR),]
-  
-  sig = test$FDR <= 0.01 & test$Total >= 1000
-  
-  return(test$Total[sig])
-  
-}
-
-libs = lapply(seq_along(cleaned_4000$cleaned), 
-              function(i) get.libsizes(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]]))
-
-libs = lapply(seq_along(libs), function(x) data.frame(libs = libs[[x]], sample = sample_map[x]))
-
-libs = do.call(rbind, libs)
-
-
-
-#libsize
-libsize = ggplot(libs, aes(x = factor(sample, levels = sample_map[order(sample_map)]), y = as.numeric(libs), fill = substr(sample, 1, 1))) +
-  geom_violin() +
-  scale_y_log10(labels = c("1,000", "10,000", "100,000"), breaks = 10^(3:5)) +
-  theme_bw() +
-  theme(legend.position = "none", 
-        panel.grid.minor.x = element_blank(), 
-        panel.grid.major.x = element_blank(), 
-        panel.grid.minor.y = element_blank(), 
-        axis.text.y = element_text(size = 10, face = "bold", colour = "black"), 
-        axis.text.x = element_text(size = 12, face = "bold", colour = "black"), 
-        axis.title = element_text(face = "bold", size = 15)) +
-  labs(x = "Sample", y = "# UMIs") +
-  scale_fill_brewer(palette = "Set2")
-
-
-print(libsize)
-
-
-
-cells_df = melt(cellcall)
-
-#CELL CALLING 
-cells = ggplot(cells_df, aes(x = sample, fill = variable, y = value)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  theme_bw() +
-  scale_fill_manual(values = c("#665178", "#A9CDC3"), name = "", label = c("Before correction", "After correction")) +
-  labs(x = "Sample", y = "# cells called") +
-  theme(legend.position = c(0.3, 0.8),
-        legend.title = element_blank(),
-        legend.background = element_rect(fill=alpha('white', 1), colour = "black"),
-        legend.text = element_text(size = 10, colour = "black", face = "bold"),
-        panel.grid.minor.x = element_blank(), 
-        panel.grid.major.x = element_blank(), 
-        panel.grid.minor.y = element_blank(), 
-        axis.text.y = element_text(size = 10, face = "bold", colour = "black"), 
-        axis.text.x = element_text(size = 12, face = "bold", colour = "black"), 
-        axis.title = element_text(face = "bold", size = 15)) +
-  scale_y_continuous(breaks = c(0,500, 1000), labels = c("0", "500", "1,000"))
-
-
-print(cells)
-
-
-swap_fix = plot_grid(libsize, cells, align = "hv", ncol = 1, labels = c("D", "E"))
-
-
-master_plot = plot_grid(NULL, conc, NULL, swap_fix, nrow = 2, labels = c("A", "B", "C"), scale = 10/11)
-
-save_plot(plot = master_plot, filename = paste0(folder_location, "/figs/cowplot_out.pdf"), useDingbats = FALSE, base_width = 11, base_height = 11)
-
-save(conc_df, libs, cells_df, sample_map, df_4000, file = paste0(folder_location, "/figs/plot_dfs.RData"))
+fig2d
 
 ```
+**Figure 2**
+
+```{r fig2}
+
+fig2 = plot_grid(fig2a,fig2b,fig2c, fig2d,
+                 labels = "AUTO",
+                 nrow = 2)
+
+save_plot(plot = fig2, filename = paste0(folder_location, "/figs/fig2.pdf"), useDingbats = FALSE, base_width = 8, base_height = 6)
+save_plot(plot = fig2c_sub, filename = paste0(folder_location, "/figs/fig2c_sub.pdf"), useDingbats = FALSE, base_width = 4*0.8, base_height = 3*0.8)
+
+fig2
+
+```
+
+**Figure 3a**
+
+```{r fig3a}
+
+#fig3a
+#cell exclusion
+fig3a = cell_exclusion + theme_figure + labs(y = "Cell removal rate", x = "Cells per sample")
+
+fig3a
+
+```
+
+**Figure 3c**
+```{r fig3c}
+#fig3b
+#schematic
+
+#fig3c
+#t-sne - new one required, as this figure operates under the emptyDrops scheme
+
+get_cells = function(expr.matrix){
+
+  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
+  
+  # test = test[!is.na(test$FDR),]
+  
+  sig = test$FDR <= 0.01
+  sig[which(is.na(sig))] = FALSE
+  
+  return(expr.matrix[,sig])
+}
+
+expr_mat = lapply(seq_along(cleaned_4000$cleaned), function(i) get_cells(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]]))
+
+
+for( i in 1:length(expr_mat)){
+  colnames(expr_mat[[i]]) = paste0(colnames(expr_mat[[i]]), "-", i)
+}
+
+
+sample_ref = lapply(1:length(expr_mat), function(x) rep(x, ncol(expr_mat[[x]])))
+
+expr_mat = do.call(cbind, expr_mat)
+rownames(expr_mat) = as.character(rownames(expr_mat))
+sample_ref = do.call(c, sample_ref)
+
+
+sce_4000 = SingleCellExperiment(assays = list(counts = expr_mat))
+rownames(sce_4000) = genes[,1]
+qc = quickCluster(sce_4000, min.size = 200, method = "igraph")
+sce_4000 = computeSumFactors(sce_4000, clusters = qc, positive = TRUE)
+sce_4000 = normalise(sce_4000)
+
+trend = trendVar(sce_4000, use.spikes = FALSE, loess.args = list(span = 0.05))
+decomp = decomposeVar(sce_4000, trend)
+decomp = decomp[order(decomp$p.value),]
+# hvgs_4000 = rownames(decomp[1:2000,])
+hvgs_4000 = rownames(decomp)[decomp$FDR < 0.01]
+
+set.seed(42)
+pca_4000 = prcomp_irlba(t(logcounts(sce_4000)[rownames(sce_4000) %in% hvgs_4000,]), n = 50)
+tsne_4000= Rtsne(pca_4000$x, pca = FALSE)
+
+rdm_tsne = sample(nrow(pca_4000$x), nrow(pca_4000$x))
+col_labs = c("A1", "A2", "B1", "B2", "C1", "C2", "D1", "D2")
+names(col_labs) = 1:length(col_labs)
+
+colouring  = factor(sample_map[sample_ref])
+
+fig3c = ggplot(as.data.frame(tsne_4000$Y)[rdm_tsne,], aes(x = V1, y = V2, col = colouring[rdm_tsne])) +
+  geom_point(size = 0.6) +
+  scale_colour_brewer(palette = "Paired", name = "Sample",
+                      labels = col_labs) +
+  labs(x = "t-SNE 1", y = "t-SNE 2") +
+  theme(legend.position = c(0.05, 0.2),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = 1),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_text(face = "bold", size = 15) ) +
+  guides(colour = guide_legend(ncol = 2, override.aes = list(size=3, 
+                                                         alpha = 1)))
+
+fig3c
+ 
+ 
+
+```
+
+**Figure 3d**
+
+```{r fig3d}
+#fig3d
+#bach lib sizes + molecule removal
+#get library size
+get.libsizes = function(expr.matrix){
+
+  test = emptyDrops(expr.matrix, niters = 30000, ignore = 1000)
+
+  test = test[!is.na(test$FDR),]
+
+  sig = test$FDR <= 0.01 & test$Total >= 1000
+
+  return(test$Total[sig])
+
+}
+libraries = lapply(seq_along(cleaned_4000$cleaned),
+              function(i) get.libsizes(cleaned_4000$cleaned[[i]] + cleaned_4000$swapped[[i]]))
+
+libraries = lapply(seq_along(libraries), function(x) data.frame(libs = libraries[[x]], sample = sample_map[x]))
+
+lib_df = do.call(rbind, libraries)
+
+
+fig3d_libs = ggplot(lib_df, aes(x = factor(sample, levels = sample_map[order(sample_map)]), y = as.numeric(libs), fill = substr(sample, 1, 2))) +
+  geom_violin() +
+  scale_y_log10(labels = c("1,000", "10,000", "100,000"), breaks = 10^(3:5)) +
+  theme(legend.position = "none", 
+        panel.grid.minor = element_blank(), 
+        panel.grid.major.x = element_blank()) +
+  theme_figure +
+  labs(x = "Sample", y = "# UMIs") +
+  scale_fill_brewer(palette = "Paired")
+
+fig3d = plot_grid(fig3d_libs, 
+                  swapped_calls + theme_figure + labs(y = "# called cells"),
+                  ncol = 1,
+                  labels = c("D", "E"))
+
+fig3d
+```
+
+**Figure 3**
+
+```{r fig3}
+fig3 = plot_grid(fig3a, NULL, fig3c, fig3d, ncol = 2, labels = c("A", "B", "C", ""))
+
+fig3
+
+save_plot(plot = fig3, filename = paste0(folder_location, "/figs/fig3.pdf"), useDingbats = FALSE, base_width = 11, base_height = 9)
+
+```
+
 
 #References
