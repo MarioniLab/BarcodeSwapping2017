@@ -1361,10 +1361,10 @@ Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a signi
 
 ## Introduction 
 
-New single-cell RNAseq protocols use microfluidic systems to automate stages of library preparation by capturing individual cells in droplets. 
+Recently developed single-cell RNAseq protocols use microfluidic systems to automate stages of library preparation by capturing individual cells in droplets. 
 Each run of the microfluidic system generates a sample that typically contains thousands of cells. 
-These droplet-based protocols label their cells in a different manner to plate-based assays, as a cell barcode (unique to each droplet) is incorporated into the transcript alongside an additional Illumina barcode that labels different sets of cells (i.e., samples). 
-Therefore, swapping of Illumina barcodes will move transcripts between samples while retaining the same cell identifier (Figure \@ref(fig:tenx-bcs)).
+These droplet-based protocols label their cells in a different manner to plate-based assays, as a cell barcode unique to each droplet is incorporated into the transcript alongside an additional Illumina barcode that labels different sets of cells (i.e., each set of cells is a single sample in droplet-based experiments). 
+Swapping of Illumina barcodes will move transcripts between samples while retaining the same cell identifier (Figure \@ref(fig:tenx-bcs)).
 
 ```{r tenx-bcs, echo=FALSE, fig.cap="Schematic of the barcoding strategy used in 10X Genomics experiments. Each captured cDNA contains multiple barcodes, including a 10X-supplied cell-labelling barcode, a randomly generated unique molecular identifier (UMI), and an Illumina-supplied sample index. Only the sample index is expected to swap, leaving the cell barcode and UMI unchanged."}
 knitr::include_graphics(paste0(folder_location, "/figs/10x_bcs.pdf"))
@@ -1477,7 +1477,7 @@ CellRanger 1.2.1 was used for data processing with default arguments.
 The six samples range in size between `r as.numeric(max(table(samp2_2500$SampleID)))` and `r as.numeric(min(table(samp2_2500$SampleID)))` called cells. 
 Two samples were excluded from analysis here due to failed library preparation.
 Only `r sum(result$shared)` cell barcodes were shared between samples, so p-values are almost universally 1 (Figure \@ref(fig:good-plot)).
-There is no excess of barcode sharing
+Again, there is no excess of barcode sharing.
 
 ```{r good-plot, fig.cap="Histogram of p-values for cell barcode sharing between all pairs of 10X samples in dataset 2, sequenced on the HiSeq 2500."}
 hist(result$p, main = "HiSeq 2500, mouse epithelial cells", xlab = "p-value", breaks = 20, xlim = c(0,1), col = "darkgrey")
@@ -1544,9 +1544,9 @@ This suggests that droplet data has an intrinsic robustness to the generation of
 
 In one experiment, we sequenced the transcriptomes of cells from four different experimental conditions (A-D), using two biological replicates for each condition (1-2).
 
-Figure \@ref(fig:tsne-4000) shows a t-sne for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph (considering 10 nearest neighbours per cell).
+Figure \@ref(fig:tsne-4000) shows a t-SNE plot for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph considering the 10 nearest neighbours per cell (CITE ME).
 
-```{r tsne-4000, fig.cap = "t-SNE of cell transcriptomes from HiSeq 4000 sequencing. Cells are coloured by sample and cluster.", fig.wide = TRUE, fig.height = 10}
+```{r tsne-4000, fig.cap = "t-SNE of cell transcriptomes in a 10X experiment sequenced on the HiSeq 4000. Each point represents a cell and is coloured by sample (top) or cluster (bottom).", fig.wide = TRUE, fig.height = 10}
 counts_4000 = readMM(paste0(folder_location, "/data/bach_counts_4000.mtx"))
 bc_4000 = read.table(paste0(folder_location, "/data/bach_barcodes_4000.tsv"), stringsAsFactors = FALSE)[,1]
 counts_2500 = readMM(paste0(folder_location, "/data/bach_counts_2500.mtx"))
@@ -1630,10 +1630,11 @@ new_theme = theme(legend.position = "left", legend.background = element_blank())
 plot_grid(fig2c + new_theme, fig_clusts + new_theme, nrow = 2)
 ```
 
-This appears to show unique populations of cells for each sample.
- 
-However, upon closer inspection we found that samples B1 and B2 possessed considerably smaller library sizes (Figure \@ref(fig:lib-size)), and shared almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
-(Accordingly, samples B1 and B2 were excluded from the earlier analyses (Figure \@ref(fig:bad-plot)).)
+This appears to show unique populations of cells for each experimental condition.
+Upon closer inspection, we found that samples B1 and B2 contained cells with considerably smaller library sizes (Figure \@ref(fig:lib-size)).
+Importantly, we observed that B1 and B2 shared almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
+This behaviour is clearly unusual.
+(Accordingly, samples B1 and B2 were excluded from the earlier analyses in Figures \@ref(fig:good-plot} and \@ref(fig:bad-plot).)
 
 ```{r lib-size, fig.cap = "Distribution of UMI count across all cell barcodes in each 10X sample. Only cell barcodes that were detected by CellRanger as cell-containing droplets are shown."}
 bc_tab <- table(samp2_all$barcode)
@@ -1679,22 +1680,18 @@ samp2$swapped_in <- samp2$barcode%in%fail_bc
 test <- wilcox.test(samp2$UmiSums[samp2$swapped_in], samp2$UmiSums[!samp2$swapped_in])
 ```
 
-Samples B1 and B2 share `r format(sample_share*100, digits = 3)`% of all their cell barcodes with each other, yet apparently contain more cells than any of the other samples. 
-This behaviour is clearly unusual.
-We hypothesize that the cells in samples B1 and B2 were damaged prior to or during library preparation in the 10X Chromium system.
+We hypothesized that the cells in samples B1 and B2 were damaged prior to or during library preparation in the 10X Chromium system.
 This resulted in the very small library sizes observed for cells in these samples, as the actual amount of input RNA in each droplet was very low. 
 Because the real cell libraries in the B samples were very small, barcode swapping from other samples generated artefactual libraries that were large relative to the real cells.
 These swapped libraries were subsequently called as cells by the CellRanger software, despite being derived purely from other samples. 
-This is supported by the excessive sharing of barcodes between the two B samples, and their sharing with the other, high-quality samples.
+This is supported by the excessive sharing of barcodes between the two B samples and with the other high-quality samples.
 
 Why have these small libraries been called as cells? 
-This is due to CellRanger's cell calling algorithm, which defines cells as "10X barcodes with a total UMI count of >= 10% of the 99th percentile of the expected recovered cells" [@zheng_massively_2017] (this is the case as of Cellranger 2.1.0, the latest version released upon submission of the manuscript). 
-If the 99th percentile UMI count is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping. 
-So, even in the absence swapped molecules, if the 99th percentile value is small, artefactual libraries are still identified as cells. 
-This is illustrated in Figure \@ref(fig:cellranger-call), which demonstrates the extremely rapid dropoff in library size for sample B1.
-Due to the rapid fall in UMI count in the B samples, it is likely that the 99th percentile value is affected.
+This is due to CellRanger's cell calling algorithm, which defines cells as all barcodes with a total UMI count greater than or equal to 10% of the 99th percentile of the expected number of recovered cells [@zheng_massively_2017] (this is the case as of Cellranger 2.1.0, the latest version at time of writing). 
+If the 99th percentile is low, many barcodes with low library sizes will be called as cells, regardless of whether the corresponding libraries are noisy, of poor quality, or derived from swapping. 
+This is illustrated in Figure \@ref(fig:cellranger-call), where the rapid drop-off in library size for sample B1 results in a smaller value for the 99th percentile (assuming that we expect to obtain around 2000 cells) compared to another sample.
 
-```{r cellranger-call, fig.wide = TRUE, fig.cap = "Sample B1 contains smaller cell libraries, and a more rapid decrease of library size. As a result, CellRanger is more prone to identifying small, artefactual cell libraries."}
+```{r cellranger-call, fig.wide = TRUE, fig.cap = "Total number of UMIs in each cell barcode for samples B1 and C2, in decreasing order for the top 500 barcodes."}
 
 libs = samp2_all$UmiSums[samp2_all$SampleID == "B1"]
 libs = libs[order(libs, decreasing = TRUE)]
@@ -1728,7 +1725,7 @@ Consider differences in library size: a large barcode library has more total cDN
 Conversely, a smaller library will contribute fewer swapped reads.
 Therefore, when calling cells based on size, we would be more likely to call an artefactual cell generated by swapping from a large library.
 
-Based on this reasoning, barcodes from high-quality samples that are also called as cells in the B samples should have larger libraries than other barcodes who are present in only the high-quality samples. 
+Based on this reasoning, barcodes from high-quality samples that are also called as cells in the B samples should have larger libraries than other barcodes that are present in only the high-quality samples. 
 Indeed, Figure \@ref(fig:smoking-gun) demonstrates that shared-barcode libraries do have significantly more molecules (p = `r format(test$p.value, digits = 3)`, with a ratio of `r format(median(samp2$UmiSums[samp2$swapped_in])/median(samp2$UmiSums[!samp2$swapped_in]), digits = 3)` between the medians).
 This confirms that the cells called in B are largely derived from swapping artefacts. 
 
@@ -1742,10 +1739,11 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
 ```
 
-To confirm if barcode swapping was driving this behaviour, we resequenced the libraries on HiSeq 2500.
-Very many cells from samples B1 and B2 were called only in the HiSeq 4000 data, as shown in Figure \@ref(fig:compare-4000-2500).
+To confirm that barcode swapping was driving this behaviour, we resequenced the libraries on HiSeq 2500.
+This resulted in the loss of many called cells from samples B1 and B2 (Figure \@ref(fig:compare-4000-2500)), consistent with the generation of artefactual cells due to swapping on the HiSeq 4000.
+By comparison, cell numbers for the other samples are largely unaffected.
 
-```{r compare-4000-2500, message = FALSE, fig.wide = TRUE, fig.cap = "Resequencing the samples on HiSeq 2500 resulted in a considerable fall in cell number for the potentially compromised B1 and B2 samples. Cell numbers for normal samples are only lowly affected."}
+```{r compare-4000-2500, message = FALSE, fig.wide = TRUE, fig.cap = "Number of called cells in each sample in the HiSeq 4000 dataset and in the resequenced HiSeq 2500 dataset."}
 
 sce_2500 = SingleCellExperiment(assays = list(counts = as(counts_2500, "dgCMatrix")))
 rownames(sce_2500) = genes[,1]
@@ -1771,11 +1769,10 @@ ggplot(big_bc, aes(x = sample, y = value, fill = variable)) +
 
 ```
 
-A t-sne of the transcriptomes in this HiSeq 2500 dataset is shown in Figure \@ref(fig:tsne-2500).
+A t-SNE of the transcriptomes in the HiSeq 2500 dataset is shown in Figure \@ref(fig:tsne-2500).
+We note that some cells still remain in samples B1 and B2, which is likely caused by the previously described problems with the 99th percentile calling strategy.
 
-```{r tsne-2500}
-
-
+```{r tsne-2500, fig.cap="t-SNE of cell transcriptomes in a 10X experiment resequenced on the HiSeq 2500. Each point represents a cell and is coloured by sample."}
 
 trend = trendVar(sce_2500, use.spikes = FALSE, loess.args = list(span = 0.05))
 decomp = decomposeVar(sce_2500, trend)
@@ -1794,10 +1791,12 @@ ggplot(as.data.frame(tsne_2500$Y)[rdm,], aes(x = V1, y = V2, col = bc_2500$sampl
 
 ```
 
-Although cells are still called in these samples, they likely still derive from the 99th percentile calling strategy described above (Figure \@ref(fig:cellranger-call))
-
-However, it is possible that the multiplexing of cells of radically different RNA content could present similar problems. 
-We advise caution when combining experimental designs of this nature with the HiSeq 4000 (or other patterned flow-cell) sequencing.
+This dataset is a particularly egregious example of the misleading effects of barcode swapping.
+Without an inspection of barcode sharing between samples, we might have concluded that a separate cell population was present in samples B1 and B2 (Figure \@ref(fig:tsne-4000)).
+This would be incorrect as there are, in fact, very few genuine cells in those samples.
+Even in more typical datasets, similar problems may arise due to differences in capture efficiency or RNA content between cells.
+Swapping from a high-cDNA library in a donor sample will generate an artefactual library in a recipient sample that is indistinguishable from a low-cDNA library generated from a real cell.
+This makes it difficult to be certain that cells actually exist in their labelled sample.
 
 # Removing barcode-swapped artefacts from droplet data
 
