@@ -188,7 +188,7 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
   scale_fill_manual(name = "Read type", values = c("royalblue2","springgreen3"), labels = c("All reads", "Mappable"))
 ```
 
-```{r richard-density}
+```{r richard-density, fig.cap="Distribution of library sizes for all expected and impossible barcode combinations."}
 
 richard_density = ggplot(data = pdf, mapping = aes(fill = expected, x = value)) +
   geom_density() +
