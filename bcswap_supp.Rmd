@@ -74,7 +74,7 @@ Briefly, unique barcodes are ligated onto the ends of the DNA molecules within e
 This incorporates a known sequence into each read, allowing the assignment of reads to their libraries of origin after sequencing.
 Multiplexing also ensures that technical effects are consistent across samples, avoiding batch effects between sequencing lanes or flow cells;
 and can provide robustness against the failure of sequencing lanes, which would otherwise result in the loss of entire samples.
-As such, multiplexing is widely considered to be standard practice for many sequencing experiments, and is essential for cost-effective analysis of small libraries such as those in single-cell RNA-sequencing studies.
+As such, multiplexing is widely considered to be standard practice for many sequencing experiments, and is essential for cost-effective analysis of small libraries such as those in single-cell RNA sequencing (scRNA-seq) studies.
 
 The most recent DNA sequencing machines released by Illumina (HiSeq 3000/4000/X, X-Ten, and NovaSeq) use patterned flow cells to improve throughput and cost efficiency. 
 On these new flow cells, the process of "seeding" DNA molecules into the patterned wells and amplification of the seeded DNA occur simultaneously. 
@@ -84,7 +84,7 @@ The mislabelling is likely driven by the extension of free barcode molecules usi
 The phenomenon has been acknowledged by Illumina [@illumina_effects_nodate], although estimates of swapping fractions vary between reports [@costello_characterization_2017]. 
 It is unclear whether a permanent solution to the problem will be forthcoming as rapid amplification after seeding is critical to the operation of the patterned flow cell machines [@sinha_index_2017].
 
-```{r intro, echo=FALSE, fig.cap="Schematic of the mechanism of barcode swapping on the HiSeq 4000. (As proposed by Sinha et al (2017).)"}
+```{r intro, echo=FALSE, fig.cap="Schematic of the mechanism of barcode swapping on the HiSeq 4000, as proposed by Sinha et al (2017)."}
 knitr::include_graphics(paste0(folder_location, "/figs/schematic.png"))
 ```
 
@@ -92,10 +92,10 @@ This "swapping" of barcode labels (also called "hopping" or "switching") is prob
 Reads labelled with a barcode specific to a given sample may have originated from any other multiplexed sample in the same pool, compromising the interpretation of the sample labels and their use in downstream analyses.
 This phenomenon is particularly relevant for single-cell -omics assays, where a large number of samples (i.e., cells) are necessarily multiplexed together for efficient use of sequencing resources. 
 Our manuscript (_"Detection and removal of barcode swapping in single-cell RNA-seq data"_) quantifies the effect of barcode swapping in a variety of single-cell RNA-seq datasets.
-We also show that swapping can create artefactual cell libraries in droplet scRNA-seq experiments.
-Finally, we have implemented a strategy to eliminate the effects of barcode swapping in droplet-based datasets without unnecessarily excluding data.
+We show that swapping can create artefactual cell libraries in droplet-based scRNA-seq experiments.
+Finally, we have implemented a strategy to eliminate the effects of barcode swapping in droplet-based datasets without excessive loss of data.
 
-This _Supplementary Materials_ file steps through all the analyses that were performed in the manuscript.
+This _Supplementary Materials_ file steps through all of the analyses that were performed in the manuscript.
 All code chunks are accessible by clicking on the `Code` buttons below.
 
 # Definition of terms
