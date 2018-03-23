@@ -2136,7 +2136,7 @@ $$\frac{\zeta}{2} \;.$$
 Clearly, unique-at-both-ends indexing severely restricts the throughput of multiplexing strategies.
 
 In practice, barcodes are often used in a 96-well plate (of dimension 12 x 8). 
-For every additional 20 barcodes that are available, 8 are used to index rows (say, 5' indexing), and 12 are used to index columns (3' indexing). 
+For every additional 20 barcodes that are available, assume that 8 are used to index rows (say, 5' indexing), and 12 are used to index columns (3' indexing). 
 Here, the number of possible barcode combinations is:
 $$\frac{8\zeta}{20}\times\frac{12\zeta}{20} = \frac{6\zeta^2}{25}$$
 
@@ -2165,7 +2165,7 @@ Additionally, the use of droplet-based protocols (e.g. 10X Genomics) is increasi
 In these experiments, samples are labelled with a single index, and so are not compatible with the unique-at-both-ends indexing approach.
 
 While we would encourage the use of experimental designs with unique-at-both-ends indexing where possible, it is clearly not a suitable approach for all experiments. 
-This motivates our development of computational methods to address barcode swapping, particularly for droplet data.
+This motivates our development of computational methods to address barcode swapping, particularly for droplet-based scRNA-seq data.
 
 # Manuscript figures
 
