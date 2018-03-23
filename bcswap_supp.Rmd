@@ -1770,7 +1770,8 @@ ggplot(big_bc, aes(x = sample, y = value, fill = variable)) +
 ```
 
 A t-SNE of the transcriptomes in the HiSeq 2500 dataset is shown in Figure \@ref(fig:tsne-2500).
-We note that some cells still remain in samples B1 and B2, which is likely caused by the previously described problems with the 99th percentile calling strategy.
+We note that the number of cells remaining in samples B1 and B2 is comparable to that in the other samples.
+This is likely due to the previously described problems with the 99th percentile calling strategy.
 
 ```{r tsne-2500, fig.cap="t-SNE of cell transcriptomes in a 10X experiment resequenced on the HiSeq 2500. Each point represents a cell and is coloured by sample."}
 
@@ -1809,7 +1810,7 @@ If problems with barcode swapping are observed, the easiest solution is to **rem
 This procedure will remove the artefacts, regardless of whether the cells truly exist in both samples (which will cause transcriptome mixing) or whether artefactual cells are being created.
 The cost of such a procedure will be the loss of some genuine cells for downstream analysis, even in the absence of swapping. 
 
-We have run simulations to understand the effects of excluding cell barcodes in the absence of swapping.
+We have run simulations to understand how much data are discarded by excluding shared cell barcodes, even in a perfect experiment (i.e., without any swapping).
 We consider a simulated experiment where 8 samples are multiplexed together. 
 Each sample consists of an equal number of cells $n$, whose barcodes are drawn at random with replacement from 10X's set of 737,280. 
 Barcodes are drawn with replacement, as the pool of 10X gel beads does not contain exactly one of each barcode.
@@ -1821,9 +1822,9 @@ Figure \@ref(fig:sim-removals) shows the rate of cell removal for different valu
 The expected rate of removal is low (< 5%) at low $n$ with few samples, corresponding to a small experiment.
 In such cases, cell exclusion is a simple and effective strategy for removing swapping artifacts without discarding much data.
 However, it is not suitable for datasets with many ($n > 10000$) cells per sample, where the expected rate of removal rapidly increases.
-Similarly, it should not be used in cases where many samples are multiplexed for sequencing, which will also inflate the exclusion rate.
+Similarly, it should not be used in cases where many samples are multiplexed for sequencing, which will also increase the exclusion rate and lead to unnecessary loss of data.
 
-```{r sim-removals, fig.cap = "Percentage of cell barcodes that are incorrectly discarded by a cell exclusion approach, irrespective of barcode swapping. This is based on simulated data for an experiment containing either 5, 15, or 30 multiplexed 10X samples each containing the same number of cells. The real exclusion rate observed would likely be in excess of these values, as artefactually generated cells are not considered here."}
+```{r sim-removals, fig.cap = "Percentage of cell barcodes that are incorrectly discarded by a cell exclusion approach, irrespective of barcode swapping. This is based on simulated data for an experiment containing either 5, 15, or 30 multiplexed 10X samples each containing the same number of cells. The real exclusion rate is likely to be larger than these values, as artefactual cells due to barcode swapping are not considered here."}
 do_sim_remove <- function(sample_size = 10000, n.samples = 8, n.barcodes = 737280){
   samples <- sapply(1:n.samples, function(x) sample(x = n.barcodes, size = sample_size, replace = TRUE))
   dups <- samples[base::duplicated(as.numeric(samples))]
@@ -1878,9 +1879,8 @@ We first considered the mouse epithelial cells sequenced on the HiSeq 4000 (i.e.
 We identified reads with the same combination of UMI, cell barcode and gene across all samples. 
 For each combination, we calculated the fraction of all reads that were observed in each sample, and obtained the largest read fraction across all samples.
 Figure \@ref(fig:read-frac-density) shows the distribution of largest read fractions for all combinations that contain reads in multiple samples.
-Combinations where all reads existed in one sample are therefore excluded.
 
-```{r read-frac-density, fig.cap="Distribution of the largest read fractions for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000."}
+```{r read-frac-density, fig.cap="Distribution of the largest read fractions for all combinations that are present in multiple samples in dataset 2, sequenced on the HiSeq 4000. Combinations where all reads existed in one sample are not considered here."}
 h5_files <- dir(paste0(folder_location, "/data/molecule_info/hiseq_4000"), full.names = TRUE)
 
 cleaned_4000 <- swappedDrops(h5_files, get.diagnostics = TRUE, get.swapped = TRUE)
@@ -1931,7 +1931,7 @@ tab = data.frame(row.names = c("Hiseq4000", "HiSeq2500"),
                                              sum(Matrix::rowSums(reads_2500>0)>1)/nrow(reads_4000)),
                                              digits = 3))
 
-kable(tab, caption = "Library summary statistics. Swapped fraction is the fraction of molecules (identical UMI, cell barcode, aligned gene) observed in more than one sample.", col.names = c("Reads", "Molecules", "Swapped fraction"))
+kable(tab, caption = "Library summary statistics. The swapped fraction is defined as the fraction of molecules (identical UMI, cell barcode, aligned gene) observed in more than one sample.", col.names = c("Reads", "Molecules", "Swapped fraction"))
 ```
 
 Figures \@ref(fig:read-frac-density-2500) and \@ref(fig:read-frac-ecdf-2500) overlay the HiSeq 2500 data over the HiSeq 4000 data.
@@ -1957,8 +1957,8 @@ ggplot() +
 
 ### Description of the method
 
-We have implemented an algorithm to exclude molecules that were swapped between single-cell 10X Genomics libraries in the `DropletUtils` package, currently available on [GitHub](https://github.com/MarioniLab/DropletUtils).
-We use the following steps:
+We have implemented an algorithm to exclude molecules that were swapped between single-cell 10X Genomics libraries in the `r Biocpkg("DropletUtils")` package.
+We perform the following steps:
 
 1. Identify reads that are present in two or more different samples, yet contain the same combination of cell barcode, UMI, and aligned gene.
 2. For each combination, calculate the fraction of all reads that was observed in each sample.
@@ -2029,7 +2029,7 @@ This is due to the removal of swapping contributions that inflate the total UMI 
 
 As previously mentioned, CellRanger will always call some barcodes as cells, regardless of whether they are derived from swapping (again, as of at least version 2.1.0).
 As such, CellRanger fails to eliminate the artefactual cells in samples B1 and B2, even after we have removed the swapped transcripts (Figure \@ref(fig:call-cellranger)). 
-We therefore recommend `emptyDrops`, which is more suitable for use with our molecule exclusion approach.
+We therefore recommend `emptyDrops` for cell calling, as it is more suitable for use with our molecule exclusion approach.
 
 ```{r call-cellranger, fig.cap = "Number of cells called in each sample of dataset 2 (sequenced on the HiSeq 4000) before and after swapped molecule removal, using the CellRanger algorithm for cell calling.", message = FALSE, warning = FALSE}
 tab <- data.frame(sample = sample_map, 
@@ -2050,8 +2050,8 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
 ### Testing the method on independent experiments
 
 Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
-Thus, we should see no swapping and therefore negligible molecule removal between the two experiments. 
-We use the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment 2.
+We should see no swapping and therefore negligible molecule removal between the two experiments. 
+We used the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment 2.
 The latter dataset has been taken from @bach_differentiation_2017.
 A summary of the two experiments is shown in Table \@ref(tab:load-run2).
 
@@ -2079,7 +2079,8 @@ df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecule
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
 
-Here, only `r sum(swapped_both)` combinations were seen in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples, as shown in Table \@ref(tab:load-run2).
+We then applied our molecule exclusion method to remove combinations that were present in both of these two datasets.
+Only `r sum(swapped_both)` combinations were observed in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples (Table \@ref(tab:load-run2)).
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
 ```{r tenx_swap_rate}
@@ -2104,17 +2105,17 @@ rate_2500 <- swapped_2500/sum(reads_2500)
 Using this framework, we can estimate a swapping fraction for this 10X data by considering the fraction of all reads that we deem to have swapped.
 Our swap-identification method provides a swapping fraction of `r format(rate_4000*100, digits = 3)`% on the HiSeq 4000, and `r format(rate_2500*100, digits = 3)`% on the HiSeq 2500. 
 This is comparable to the swapping fraction we estimated for Smart-seq2 data, with a modest discrepency attributable to differences between the assays [@costello_characterization_2017].
-Nonetheless, consistent with our previous results, we observe an order of magnitude difference between swapping fractions on each technology.
+Consistent with our previous results, we observe an order of magnitude difference between swapping fractions on each technology.
 
 Note that this swapped fraction is harder to interpret than the fractions for plate based data for a number of reasons:
 
-* Interpretation of the effects of a certain swapping fraction is more complicated for droplet experiments, as a swapped read does not necessarily find itself in the library of another cell.
+- As previously menbtioned, a swapped read does not necessarily find itself in the library of another cell.
+Instead, it may result in the generation of a new artefactual cell library.
+This complicates interpretation of the effects of a given swapping fraction.
 
-* The 10X swapped fraction estimate relies on our sample-of-origin identification procedure (i.e. fraction of reads $\geq$ 80\%). Molecules without a clear sample-of-origin are all considered to be swapped, which yields inaccurate estimates of the swapped fraction.
+- The 10X swapped fraction estimate relies on our sample-of-origin identification procedure (i.e. fraction of reads $\geq$ 80\%). Molecules without a clear sample-of-origin are all considered to be swapped, which yields inaccurate estimates of the swapped fraction.
 
-* Our method effectively removes swapped molecules from droplet data without knowledge of the swapping rate. No such solution exists for plate-based data, which means that an understanding of experimental swapping fractions is considerably more important in this context.
-
-* Each 10X sample is  actually labelled by a mixture of four sample barcodes. We have only considered swapping between samples, not the swapping of individual barcodes. This is therefore not an estimate of the molecular swapping rate
+- Each 10X sample is  actually labelled by a mixture of four sample barcodes. We have only considered swapping between samples, not the swapping of individual barcodes. This is therefore not an estimate of the molecular swapping rate
 
 # Experimental solutions for barcode swapping
 
