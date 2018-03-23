@@ -134,7 +134,7 @@ ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
 
 ## Details of data generation
 
-Cells were prepared for single-cell RNA-seq by the SmartSeq2 protocol [@picelli_full-length_2014] with the following modifications. 
+Cells were prepared for single-cell RNA-seq using the SmartSeq2 protocol [@picelli_full-length_2014] with the following modifications. 
 Cells were sorted into 96-well plates holding 4 $\mu$L of lysis buffer composed of 2.3 U SUPERase In RNase inhibitor (Thermo Fisher Scientific), 0.11 % (v/v) Triton X-100 (Sigma), 12.5 mM DTT (Thermo Fisher Scientific), and 2.5 mM dNTP mix (Thermo Fisher Scientific). 
 1 $\mu$L annealing mix containing diluted ERCC RNA Spike-In Mix (Thermo Fisher Scientific) and 10 $\mu$M oligo-dT30VN (Sigma) was added to each well before reverse transcription with SuperScript II (Invitrogen). 
 cDNA amplification was performed with 23 PCR cycles and the resulting PCR products purified with Ampure XP Beads (Agencourt) at a volume ratio of 0.7:1 beads:DNA. 
@@ -143,10 +143,10 @@ Each plate of libraries was pooled, cleaned with Ampure XP beads, and quantitate
 Equimolar quantities of libraries from each plate were combined for sequencing.
 
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
-Read mapping was performed using the _Subread_ aligner (v1.5.1) [@liao_subread_2013] to the Ensembl mm10 genome with ERCC92 annotation.
+Read mapping was performed using the _Subread_ aligner (v1.5.1) [@liao_subread_2013] to the mm10 build of the mouse genome with additional ERCC sequences (http://www.thermofisher.com/order/catalog/product/4456739).
 We used a Phred offset of 33 and only considered uniquely mapped reads, with default values for all other parameters.
 We counted the number of reads mapped to each gene in each cell using the `featureCounts` function [@liao_featurecounts:_2014] in the `r Biocpkg("Rsubread")` package with default options (except for `minMQS=10`, to retain only high-quality alignments).
-This assigned reads to exonic regions of each gene in the Ensembl mm10 GTF file, or to spike-in transcripts in the Thermo-Fisher ERCC92 GTF (see https://github.com/MarioniLab/CommonResources for details).
+This function assigned reads to exonic regions of each gene in the Ensembl mm10 annotation (version 82) or to ERCC spike-in transcripts.
 
 ## Examination of the library sizes
 
@@ -169,7 +169,7 @@ medfrac.all <- median(libs$reads[!libs$expected])/median(libs$reads[libs$expecte
 totfrac.all <- sum(libs$reads[!libs$expected])/sum(libs$reads[libs$expected])
 ```
 
-The distribution of total number of mapped reads (i.e., library sizes) for all combinations are shown in Figure \@ref(fig:richard-boxplot). 
+The distribution of total number of mapped reads (i.e., library sizes) for all combinations is shown in Figure \@ref(fig:richard-boxplot). 
 The impossible combinations have a median mapped-read library size that is `r format(medfrac.mapped*100, digits = 2)`% of the median size of the expected combinations. 
 The total number of mapped reads assigned to impossible combinations is `r format(totfrac.mapped*100, digits = 2)`% of that assigned to expected combinations. 
 Note that the empty well is still considered as an expected barcode combination due to the presence of ERCC spike-in transcripts.
@@ -187,21 +187,21 @@ ggplot(data = pdf, mapping = aes(x = expected, y = value, fill = variable)) +
 
 We focused on mapped reads as these are most relevant to downstream analyses.
 Nonetheless, we observe similar results for all reads, consistent with the ability of barcode swapping to affect all molecules on the flow cell.
-The median-to-median ratio of all reads (impossible:expected) is `r format(medfrac.all*100, digits = 2)`%,
+The median number of all reads assigned to an impossible combination is `r format(medfrac.all*100, digits = 2)`% of that assigned to an expected combination,
 while the total number of reads assigned to impossible combinations is `r format(totfrac.all*100, digits = 2)`% of the total number of reads assigned to expected combinations.
 
 We emphasize that our results are highly robust to contamination from ambient RNA or human/bacterial sources.
-Such contamination, which is possible on empty wells of a microwell plate, may lead to the appearance of an elevated rate of swapping, because mappable reads are detected where no cell was placed.
 Regardless of the amount of contamination, the impossible barcode combinations should not contain any reads, because these pairs of barcodes were never mixed in library preparation.
 Barcode swapping is the only possible mechanism for obtaining a substantial number of non-zero reads for these combinations.
 (We ignore the possibility of barcode sequencing errors causing misassignment of reads, which would be extremely unlikely for 8 bp barcodes that are well separated in base space.)
-This provides a point of difference for our experimental design compared to that of @sinha_index_2017.
+This provides a point of difference for our experimental design compared to that of @sinha_index_2017, who estimated the swapping rate based on empty wells that still contained barcodes.
+In their design, contamination would result in mapped reads in the empty wells and the appearance of an elevated rate of swapping.
 
 ## Swapping fraction estimation on the HiSeq 4000
 
 Denote each barcode combination as $(i, j)$ where barcode $i \in {1,\dots,16}$ represents a row in Figure \@ref(fig:richard-schematic) (with $i=1\Rightarrow \text{S522}, i=16\Rightarrow \text{S502}$) and barcode $j \in {1,\dots,24}$ represents a column ($j=1\Rightarrow \text{N701}, j=24\Rightarrow \text{N729}$). 
 Let $M_{i,j}$ denote the number of seeded cDNA molecules that truly originate from this combination, and let $X_{i,j}$ denote the number of mapped reads.
-$M_{i,j}$ therefore represents the true source of reads, while $X_{i,j}$ represented the reported source, after swapping.
+$M_{i,j}$ therefore represents the true source of reads, while $X_{i,j}$ represents the reported source after swapping.
 Impossible barcode combinations are those with $1 \leq i \leq 8, 1\leq j \leq 12$ or $9\leq i \leq 16, 13\leq j \leq 24$, and have $M_{i,j}=0$ by definition.
 
 We assume that barcode swapping is rare, so it is unlikely that one molecule will undergo more than one round of swapping. 
@@ -244,7 +244,7 @@ As barcode swapping is rare, $\rho$ should be very low such that $\tilde{X}_{i,j
 We further approximate $\tilde{X}_{i,j}$ for these expected combinations by replacing it with the observed $X_{i,j}$.
 This means that, for each impossible combination $(i^*, j^*)$, we have 
 
-$$\tilde{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i,k} + \sum_{l \neq i^*} X_{l,j}\right) \;. $$
+$$\tilde{X}_{i^*,j^*} \approx \frac{\rho}{\tau} \left( \sum_{k \neq j^*} X_{i^*,k} + \sum_{l \neq i^*} X_{l,j^*}\right) \;. $$
 
 This represents a linear relationship between the library size for each impossible combination and the sum of the library sizes for all expected combinations with which it shares a single barcode.
 We estimate the parameters of this relationship by fitting a line to each $X_{i^*,j^*}$ against the corresponding sum using ordinary least squares, as shown in Figure \@ref(fig:correlation).
@@ -258,7 +258,7 @@ nsums = rowSums(casted, na.rm = T)
 ssums = colSums(casted, na.rm = T)
 
 unexp = libs[!libs$expected, ]
-# Now make the data frame from unexpected combinations for model fit
+# Now make the data frame from impossible combinations for model fit
 cell_outs = lapply(1:nrow(unexp), function(x) data.frame(mapped = unexp$mapped[x],
                                              col = ssums[unexp$bc2[x]],
                                              row = nsums[unexp$bc1[x]]))
@@ -332,11 +332,11 @@ $$
 
 This yields an estimated swapping fraction of `r format(rate_estimate * 100, digits = 3, nsmall = 3)` $\pm$ `r format(rate_error * 100, digits = 3, nsmall = 3)`%. 
 Notably, this is higher than the median-to-median fraction of `r format(medfrac.mapped*100, digits = 2)`%. 
-This is because the median-to-median fraction only considered swapped reads arriving in the unexpected barcode combinations, whereas this slope-estimated value considers reads swapping across the entire set of barcode combinations.
+This is because the median-to-median fraction only considered swapped reads in the impossible barcode combinations, whereas this slope-estimated value considers reads that swap across the entire set of barcode combinations.
 
 Note that we fitted the line in Figure \@ref(fig:correlation)  with an intercept term.
 The value of the intercept is `r format(coef(summary(mod_mapped))[1,1], digits = 4, nsmall = 1)` $\pm$ `r format(coef(summary(mod_mapped))[1,2], digits = 4, nsmall =1)`.
-This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the unexpected combinations, consistent with our model for $\tilde{X}_{i^*,j^*}$.
+This is close to zero compared to a median library size of `r median(libs$mapped[!libs$expected])` for the impossible combinations, consistent with our model for $\tilde{X}_{i^*,j^*}$.
 
 ## Swapping fraction estimation on the HiSeq 2500
 
@@ -364,9 +364,9 @@ medfrac.2500 <- median(libs_2500$mapped[!libs_2500$expected])/median(libs_2500$m
 totfrac.2500 <- sum(libs_2500$mapped[!libs_2500$expected])/sum(libs_2500$mapped[libs_2500$expected])
 ```
 
-In the HiSeq 2500 data, many fewer reads are present in the unexpected barcode combinations. 
-The unexpected combinations have a median library size of `r format(medfrac.2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(medfrac.mapped*100, digits = 2)`% from the HiSeq 4000). 
-Considering all mapped reads on the plate, there are `r format(totfrac.2500*100, digits = 2)`% as many in the unexpected combinations as in the expected ones (compared to `r format(totfrac.mapped*100, digits = 2)`% from the HiSeq 4000).
+In the HiSeq 2500 data, many fewer reads are present in the impossible barcode combinations. 
+The impossible combinations have a median library size of `r format(medfrac.2500*100, digits = 2)`% the median size of the expected combinations (compared to `r format(medfrac.mapped*100, digits = 2)`% from the HiSeq 4000). 
+Considering all mapped reads on the plate, there are `r format(totfrac.2500*100, digits = 2)`% as many in the impossible combinations as in the expected ones (compared to `r format(totfrac.mapped*100, digits = 2)`% from the HiSeq 4000).
 
 We applied the same model to the HiSeq 2500 data as described above for the HiSeq 4000 data.
 Results are shown in Figure \@ref(fig:model-2500).
