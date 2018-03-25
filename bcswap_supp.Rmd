@@ -1735,7 +1735,6 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   theme_bw() +
   scale_y_log10(breaks = c(1000, 10000, 100000), labels = c("1,000", "10,000", "100,000"), name = "Library size", lim = c(min(samp2$UmiSums)*0.8, max(samp2$UmiSums)*1.5)) +
   scale_x_discrete(labels = c("Unique cell\nbarcode", "Shared cell\nbarcode"), name = "") +
-  geom_signif(comparisons = list(c(1, 2)), annotations = "***") +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
 ```
 
