@@ -1355,8 +1355,8 @@ Of all tested genes, `r format(anova_frac*100, digits = 3)`% exhibited a signifi
 Of these significant genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the expected barcode swapping model.
 This strongly suggests that barcode swapping is more prevalent on the HiSeq 4000 compared to the HiSeq 2500, and that it affects nearly all tested genes.
 
-As a negative control, we also fitted these models to an experiment sequenced only on HiSeq 2500. 
-Specifically, we considered the same model as described above, but comparing the data from two lanes of sequencing of the same sequencing library.
+As a negative control, we also fitted these models to an experiment sequenced only on the HiSeq 2500. 
+Specifically, we considered the same model as described above, but replacing the HiSeq 4000 counts with a replicate sequencing run of the same multiplexed pool that was also sequenced on the HiSeq 2500.
 Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as there is no increased incidence of swapping between the two lanes, supporting the robustness of the model used.
 
 # Droplet-based analyses
@@ -1546,7 +1546,7 @@ This suggests that droplet data has an intrinsic robustness to the generation of
 
 In one experiment, we sequenced the transcriptomes of cells from four different experimental conditions (A-D), using two biological replicates for each condition (1-2).
 
-Figure \@ref(fig:tsne-4000) shows a t-SNE plot for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph @xu_identification_2015 considering the 10 nearest neighbours per cell (CITE ME).
+Figure \@ref(fig:tsne-4000) shows a t-SNE plot for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph [@xu_identification_2015] considering the 10 nearest neighbours per cell.
 
 ```{r tsne-4000, fig.cap = "t-SNE of cell transcriptomes in a 10X experiment sequenced on the HiSeq 4000. Each point represents a cell and is coloured by sample (top) or cluster (bottom).", fig.wide = TRUE, fig.height = 10}
 counts_4000 = readMM(paste0(folder_location, "/data/bach_counts_4000.mtx"))
@@ -2051,10 +2051,10 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
 ### Testing the method on independent experiments
 
 Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
-We should see no swapping and therefore negligible molecule removal between the two experiments. 
+We do this as a test on the precision as the method: with two completely separate experiments there is no swapping, and therefore we should observe no or very few molecules sharing UMI, aligned gene, and cell barcode between the two datasets. 
 We used the HiSeq 2500 dataset described previously in the section *Artefactual cells appear due to barcode swapping in compromised samples*, termed Experiment A, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment B.
-The latter dataset has been taken from @bach_differentiation_2017.
-A summary of the two experiments is shown in Table \@ref(tab:load-run2).
+Dataset B is the same data that was analysed in @bach_differentiation_2017.
+A summary of the two experiments is shown in Table \@ref(tab:load-run2), highlighting the number of reads generated in each experiment and the fraction of molecules within each experiment that were deemed to have swapped (according to our method).
 
 ```{r load-run2}
 new_files <- c(h5_files_2500,
@@ -2080,9 +2080,8 @@ df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecule
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
 
-We then applied our molecule exclusion method to remove combinations that were present in both of these two datasets.
-This serves as a negative control for our method, because there should be no swapping of reads between the two experiments as they were run and sequenced entirely separately.
-Only `r sum(swapped_both)` combinations were observed in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples (Table \@ref(tab:load-run2)), consistent with the lack of multiplexing between these two experiments.
+We then applied our molecule exclusion method to identity the UMI-gene-cell barcode combinations that were present in both of these two experiments, as if they were each a single sample in a multiplexed experiment.
+Only `r sum(swapped_both)` combinations were observed in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all observed combinations), which is considerably fewer than the number of swapped molecules observed within the truly multiplexed samples in each experiment (Table \@ref(tab:load-run2)).
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
 ```{r tenx_swap_rate}
