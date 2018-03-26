@@ -432,7 +432,8 @@ ggplot(df, aes(x = tot, y = mapped)) +
   scale_y_continuous(breaks = c(0, 600, 1200), labels = c("0", "600", "1,200"), limits = c(0,1250))+
   theme(axis.text = element_text(face = "bold", size = 11), 
        axis.title.y = element_text(size = 13, face = "bold"), 
-       axis.title.x = element_text(size = 13, face = "bold"))
+       axis.title.x = element_text(size = 13, face = "bold")) +
+  annotate("text", x = 5e6, y = 1000, label = paste0("italic(R)^2 == ", format(summary(mod_mapped_2500)$r.squared, digits = 2)), parse = TRUE, fontface = "bold", size = 7)
 
 factor <- sum(libs_2500$mapped[libs$expected])/sum(libs_2500$mapped)
 rate_estimate_2500 <- coef(mod_mapped_2500)[2] * 38 * factor
@@ -977,7 +978,7 @@ qplot(rate_500, rate_500_rowcol) +
 ```
 
 The mean value of the information score for the top 500 genes (excluding `Inf`) is not associated with the estimated swapping fraction (Figure \@ref(fig:genes-inf)). 
-This indicates that the expression abundance of sporadically expressed genes does not drive differences in the swapping fraction estimates.
+This indicates that differences in the availability of genes with high information score do not drive differences in the swapping fraction estimates.
 
 ```{r genes-inf, fig.cap="Relationship between the swapping fraction estimate from each plate and the mean information score for the top 500 genes."}
 plates <- 1:length(noswap_split)
@@ -1354,8 +1355,9 @@ Of all tested genes, `r format(anova_frac*100, digits = 3)`% exhibited a signifi
 Of these significant genes, `r format(support_frac*100, digits = 3)`% have a positive value of $\beta$, supporting the expected barcode swapping model.
 This strongly suggests that barcode swapping is more prevalent on the HiSeq 4000 compared to the HiSeq 2500, and that it affects nearly all tested genes.
 
-As a negative control, we also fitted these models to data where identical library pools were sequenced on two lanes of a HiSeq 2500. 
-Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as expected.
+As a negative control, we also fitted these models to an experiment sequenced only on HiSeq 2500. 
+Specifically, we considered the same model as described above, but comparing the data from two lanes of sequencing of the same sequencing library.
+Here, only `r format(anova_frac_twolane*100, digits = 3)`% of genes have a significantly improved fit with the $\beta$ term, as there is no increased incidence of swapping between the two lanes, supporting the robustness of the model used.
 
 # Droplet-based analyses
 
@@ -1544,7 +1546,7 @@ This suggests that droplet data has an intrinsic robustness to the generation of
 
 In one experiment, we sequenced the transcriptomes of cells from four different experimental conditions (A-D), using two biological replicates for each condition (1-2).
 
-Figure \@ref(fig:tsne-4000) shows a t-SNE plot for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph considering the 10 nearest neighbours per cell (CITE ME).
+Figure \@ref(fig:tsne-4000) shows a t-SNE plot for the cell transcriptomes after application of a typical scRNA-seq analysis pipeline. Clusters were identified using the Louvain clustering algorithm on a shared nearest neighbour graph @xu_identification_2015 considering the 10 nearest neighbours per cell (CITE ME).
 
 ```{r tsne-4000, fig.cap = "t-SNE of cell transcriptomes in a 10X experiment sequenced on the HiSeq 4000. Each point represents a cell and is coloured by sample (top) or cluster (bottom).", fig.wide = TRUE, fig.height = 10}
 counts_4000 = readMM(paste0(folder_location, "/data/bach_counts_4000.mtx"))
@@ -2050,7 +2052,7 @@ ggplot(melt(tab), aes(x = sample, fill = variable, y = value)) +
 
 Finally, we applied our molecule exclusion method on two different datasets that were processed and sequenced separately.
 We should see no swapping and therefore negligible molecule removal between the two experiments. 
-We used the HiSeq 2500 dataset described above, termed Experiment 1, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment 2.
+We used the HiSeq 2500 dataset described previously in the section *Artefactual cells appear due to barcode swapping in compromised samples*, termed Experiment A, and a complete replicate of the same experiment that was processed and sequenced (again on the HiSeq 2500) at a later date, termed Experiment B.
 The latter dataset has been taken from @bach_differentiation_2017.
 A summary of the two experiments is shown in Table \@ref(tab:load-run2).
 
@@ -2072,14 +2074,15 @@ swapped_expt2 <- sum(Matrix::rowSums(present_expt2)>1)
 swapped_both <- Matrix::rowSums(present_expt1) > 0 & Matrix::rowSums(present_expt2) > 0
 
 df <- data.frame("Metric" = c("Number of molecules", "Number of swapped molecules", "Swapped fraction"),
-                 "Experiment 1" = c(n_mol_expt1, swapped_expt1, paste0(format(swapped_expt1/n_mol_expt1 * 100, digits = 3), "%")),
-                 "Experiment 2" = c(n_mol_expt2, swapped_expt2, paste0(format(swapped_expt2/n_mol_expt2 * 100, digits = 3), "%")))
+                 "Experiment A" = c(n_mol_expt1, swapped_expt1, paste0(format(swapped_expt1/n_mol_expt1 * 100, digits = 3), "%")),
+                 "Experiment B" = c(n_mol_expt2, swapped_expt2, paste0(format(swapped_expt2/n_mol_expt2 * 100, digits = 3), "%")))
 
 kable(df, caption = "Summary of the two different experiments.", row.names = FALSE)
 ```
 
 We then applied our molecule exclusion method to remove combinations that were present in both of these two datasets.
-Only `r sum(swapped_both)` combinations were observed in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples (Table \@ref(tab:load-run2)).
+This serves as a negative control for our method, because there should be no swapping of reads between the two experiments as they were run and sequenced entirely separately.
+Only `r sum(swapped_both)` combinations were observed in both datasets (`r format(sum(swapped_both)/n_mol *100, digits = 3)`% of all combinations), which is considerably fewer than the number of swapped molecules observed within multiplexed samples (Table \@ref(tab:load-run2)), consistent with the lack of multiplexing between these two experiments.
 This demonstrates the specificity of our molecule exclusion method for removing swapping artefacts in 10X data.
 
 ```{r tenx_swap_rate}
