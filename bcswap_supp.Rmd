@@ -2110,7 +2110,7 @@ Consistent with our previous results, we observe an order of magnitude differenc
 
 Note that this swapped fraction is harder to interpret than the fractions for plate based data for a number of reasons:
 
-- As previously menbtioned, a swapped read does not necessarily find itself in the library of another cell.
+- As previously mentioned, a swapped read does not necessarily find itself in the library of another cell.
 Instead, it may result in the generation of a new artefactual cell library.
 This complicates interpretation of the effects of a given swapping fraction.
 
