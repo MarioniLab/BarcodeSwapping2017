@@ -4,15 +4,15 @@
 
 There are two main components to this repo: the supplementary report for the paper **Detection and Removal of Barcode Swapping in Single-Cell RNA-seq data** (`bcswap_supp.html`) and the code used to generate it (all other files). 
 
-Unless you want to reuse any of the code, or to tweak or regenerate the report for yourself, you probably only want the report, and not any of the other files.
+Unless you want to reuse any of the code or tweak/regenerate the report for yourself, you probably only want only the .html file of the report.
 
 The preprint of the paper can be found [here](http://www.biorxiv.org/content/early/2017/08/16/177048)
 
-You can also find a .pdf of a poster I have used to present this work (`poster.pdf`)
+You can also find a .pdf of a poster I have used to present this work at Single Cell Genomics 2017 (`poster.pdf`)
 
 ## Report information
 
-On my machine, Github will not show the html report interactively via the webpage: to view this document, it's easiest to download the entire repo as a zipped file (click "Clone or download" above, in green) or otherwise clone the repo.
+On my machine, Github will not show the html report interactively via the webpage: to view this document, it's easiest to download the entire repo as a zipped file (click "Clone or download" above, in green) or otherwise clone the repo using git itself.
 
 ## Code information
 
@@ -32,6 +32,9 @@ If you are interested in the barcode swapping phenomenon, there are several othe
 
 * Illumina [released a white paper](https://www.illumina.com/content/dam/illumina-marketing/documents/products/whitepapers/index-hopping-white-paper-770-2017-004.pdf?linkId=36607862) summarising the issue.
 
-* [Larsson et al.](http://www.biorxiv.org/content/early/2017/08/16/176537) describe a method to deconvolve the effects of swapping from plate-based scRNA-seq assays
+* [Larsson et al.](https://www.nature.com/articles/nmeth.4666) describe a method to deconvolve the effects of swapping from plate-based scRNA-seq assays, and suggest a method for estimating swapping rates using the distinctive "crosshair" patterns.
 
 * [van der Valk et al.](http://www.biorxiv.org/content/early/2017/08/22/179028) do not identify excessive barcode swapping on HiSeq X (they also have an excellent and in-depth introduction to the barcode swapping phenomenon)
+
+* [Costello et al.](https://link.springer.com/article/10.1186/s12864-018-4703-0) have produced a very comprehensive overview of the swapping they have observed in their lab.
+

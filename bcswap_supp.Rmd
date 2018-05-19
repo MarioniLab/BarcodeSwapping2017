@@ -19,9 +19,14 @@ author:
   - *cruk
   - EMBL European Bioinformatics Institute (EMBL-EBI), Wellcome Genome Campus, CB10 1SD, Hinxton, United Kingdom
   - Wellcome Trust Sanger Institute, Wellcome Genome Campus, CB10 1SA, Hinxton, United Kingdom
-date: "24/01/2018"
+date: "15/05/2018"
 output:
   BiocStyle::html_document:
+    code_folding: hide
+    number_sections: yes
+    toc: yes
+    titlecaps: false
+  BiocStyle::pdf_document:
     code_folding: hide
     number_sections: yes
     toc: yes
@@ -137,13 +142,7 @@ richard_design
 
 ## Details of data generation
 
-Cells were prepared for single-cell RNA-seq using the SmartSeq2 protocol [@picelli_full-length_2014] with the following modifications. 
-Cells were sorted into 96-well plates holding 4 $\mu$L of lysis buffer composed of 2.3 U SUPERase In RNase inhibitor (Thermo Fisher Scientific), 0.11 % (v/v) Triton X-100 (Sigma), 12.5 mM DTT (Thermo Fisher Scientific), and 2.5 mM dNTP mix (Thermo Fisher Scientific). 
-1 $\mu$L annealing mix containing diluted ERCC RNA Spike-In Mix (Thermo Fisher Scientific) and 10 $\mu$M oligo-dT30VN (Sigma) was added to each well before reverse transcription with SuperScript II (Invitrogen). 
-cDNA amplification was performed with 23 PCR cycles and the resulting PCR products purified with Ampure XP Beads (Agencourt) at a volume ratio of 0.7:1 beads:DNA. 
-Libraries were prepared using Nextera XT DNA Sample Preparation Kit and indexes from the Nextera XT Index Kit v2 Set A and Nextera XT Index Kit v2 Set D (Illumina). 
-Each plate of libraries was pooled, cleaned with Ampure XP beads, and quantitated using KAPA Library Quantification Kit (Roche). 
-Equimolar quantities of libraries from each plate were combined for sequencing.
+Cells were prepared for single-cell RNA-seq using the SmartSeq2 protocol [@picelli_full-length_2014], adapted as described in [@richard_t_2018]. Briefly, cells were sorted into 96-well plates with 4 $\mu$L of lysis buffer: 0.11 % (v/v) Triton X-100 (Sigma), 12.5 mM DTT (Thermo Fisher Scientific), 2.5 mM dNTP mix (Thermo Fisher Scientific), and 2.3 U SUPERase In RNase inhibitor (Thermo Fisher Scientific). Annealing mix, composed of diluted ERCC RNA Spike-In Mix (Thermo Fisher Scientific) and 10 $\mu$M oligo-dT30VN (Sigma), was added 1 $\mu$L per well, and reverse transcription was performed using SuperScript II (Invitrogen). cDNA was amplified (23 PCR cycles) and purified with Ampure XP Beads (Agencourt) at 0.7 beads / 1 DNA (v/v). Library preparation was performed with the Nextera XT DNA Sample Preparation Kit using indexes from the Nextera XT Index Kit v2 Set A and Set D (Illumina). Libraries from each plate were pooled and purified with Ampure XP beads before quantification with the KAPA Library Quantification Kit (Roche). Library pools from each plate were combined in equimolar quantities. Library sequencing was performed both on an Illumina HiSeq4000 and an Illumina HiSeq2500.
 
 Reads were demultiplexed allowing for any of the barcode combinations shown in Figure \@ref(fig:richard-schematic) (including the impossible combinations).
 Read mapping was performed using the _Subread_ aligner (v1.5.1) [@liao_subread_2013] to the mm10 build of the mouse genome with additional ERCC sequences (http://www.thermofisher.com/order/catalog/product/4456739).
@@ -1740,6 +1739,21 @@ ggplot(samp2, aes(x=swapped_in, y = UmiSums)) +
   theme(panel.grid.major.x = element_blank(), axis.text.y = element_text(size = 10), axis.text.x = element_text(size = 12, face = "bold"), axis.title = element_text(face = "bold", size = 15))
 ```
 
+Given this, one might expect the swapped libraries to cluster with the cell populations from which these libraries truly derived. However, this is clearly not the case. We hypothesise that this is due to the presence of cell types specific to samples B1 and B2 that are lysed during sample preparation. Their RNA is subsequently released into solution and captured in cell-free droplets that share a cell barcode with the swapped artefactual cells from other samples. The expression of one such gene is shown in Figure \@ref(fig:violin-b).
+
+```{r violin-b, fig.cap = "Violin plot of gene expression in the called cells from each sample.", fig.wide = TRUE}
+ens = genes[match("Csn1s2b", genes[,2]), 1]
+expr = logcounts(sce_4000)[ens,]
+order = order(bc_4000$sample)
+
+ggplot(mapping=aes(x = bc_4000$sample[order], y = expr[order], fill = bc_4000$sample[order])) +
+  geom_violin(scale = "width") +
+  scale_fill_brewer(palette = "Paired", name = "") +
+  labs(x = "", y = "Csn1s2b log2 count")
+  
+
+```
+
 To confirm that barcode swapping was driving this behaviour, we resequenced the libraries on HiSeq 2500.
 This resulted in the loss of many called cells from samples B1 and B2 (Figure \@ref(fig:compare-4000-2500)), consistent with the generation of artefactual cells due to swapping on the HiSeq 4000.
 By comparison, cell numbers for the other samples are largely unaffected.
@@ -2197,7 +2211,7 @@ fig2a
 
 ```{r fig2b}
 
-fig2b =  richard_density + theme(legend.position = "none") + theme_figure
+fig2b =  richard_density + theme(legend.position = "none", axis.text.x = element_text(size = 9, face = "bold")) + theme_figure
                             
 fig2b
 
@@ -2258,11 +2272,11 @@ fig2d
 ```{r fig2}
 
 fig2 = plot_grid(fig2a,fig2b,fig2c, fig2d,
-                 labels = "AUTO",
+                 labels = "auto",
                  nrow = 2)
 
 save_plot(plot = fig2, filename = paste0(folder_location, "/figs/fig2.pdf"), useDingbats = FALSE, base_width = 8, base_height = 6)
-save_plot(plot = fig2c_sub, filename = paste0(folder_location, "/figs/fig2c_sub.pdf"), useDingbats = FALSE, base_width = 4*0.8, base_height = 3*0.8)
+ggsave(plot = fig2c_sub, filename = paste0(folder_location, "/figs/fig2c_sub.pdf"), useDingbats = FALSE, width = 4*0.8, height = 3*0.8)
 
 fig2
 
@@ -2394,7 +2408,7 @@ fig3d_libs = ggplot(lib_df, aes(x = factor(sample, levels = sample_map[order(sam
 fig3d = plot_grid(fig3d_libs, 
                   swapped_calls + theme_figure + labs(y = "# called cells"),
                   ncol = 1,
-                  labels = c("D", "E"))
+                  labels = c("d", "e"))
 
 fig3d
 ```
@@ -2402,7 +2416,7 @@ fig3d
 **Figure 3**
 
 ```{r fig3}
-fig3 = plot_grid(fig3a, NULL, fig3c, fig3d, ncol = 2, labels = c("A", "B", "C", ""))
+fig3 = plot_grid(fig3a, NULL, fig3c, fig3d, ncol = 2, labels = c("a", "b", "c", ""))
 
 fig3
 
