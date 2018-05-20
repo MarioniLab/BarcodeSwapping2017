@@ -27,7 +27,6 @@ output:
     toc: yes
     titlecaps: false
   BiocStyle::pdf_document:
-    code_folding: hide
     number_sections: yes
     toc: yes
     titlecaps: false
