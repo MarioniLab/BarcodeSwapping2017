@@ -127,7 +127,7 @@ We used dual indices for cell labelling, i.e., a different barcode was used at e
 The barcodes used for each plate are from mutually exclusive sets - any barcode from one plate was never used on the other (Figure \@ref(fig:richard-schematic)). 
 For sequencing, all cell libraries from the two plates were multiplexed. 
 
-```{r richard-schematic, fig.cap="Overview of the experimental design in the Richard dataset. Each position of the plot represents a barcode combination. Each of the orange blocks represents at 96-well plate. One barcode combination (N729,S522) in one of the plates did not contain a cell, but did contain barcodes and spike-in transcripts. Barcode combinations in the grey positions were not used, and thus should not contain sequencing reads."}
+```{r richard-schematic, fig.cap="Overview of the experimental design in the Richard dataset. Each position of the plot represents a barcode combination. Each of the blue blocks represents at 96-well plate. One barcode combination (N729,S522) in one of the plates did not contain a cell, but did contain barcodes and spike-in transcripts. Barcode combinations in the grey positions were not used, and thus should not contain sequencing reads."}
 richard_design = ggplot(data = libs, mapping = aes(x = bc1, y = bc2)) +
   geom_tile(aes(fill = expected | empty_well)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
@@ -224,7 +224,7 @@ This means that reads will only be transferred between combinations that already
 This is illustrated in Figure \@ref(fig:swap-schematic-source).
 For that example, the combination `N719` and `S505` (red position) would receive swapping contributions from the cells in the blue positions.
 
-```{r swap-schematic-source, fig.cap="A schematic of the expected barcode combinations that are potential donor libraries (blue) for swapping into a recipient library (red), an impossible combination (S505/N719). Only a single barcode needs to be swapped for transcripts in the blue combinations to appear as reads in the red combintion. Used barcode pairs are shown in grey, and unused barcode pairs are shown in black."}
+```{r swap-schematic-source, fig.cap="A schematic of the expected barcode combinations that are potential donor libraries (orange) for swapping into a recipient library (red), an impossible combination (S505/N719). Only a single barcode needs to be swapped for transcripts in the blue combinations to appear as reads in the red combintion. Used barcode pairs are shown in grey, and unused barcode pairs are shown in black."}
 is_target <- libs$bc1 == "N719" & libs$bc2 == "S505"
 avail <- (libs$bc1 == "N719" | libs$bc2 == "S505") & libs$expected
 
