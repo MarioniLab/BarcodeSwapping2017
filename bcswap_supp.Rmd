@@ -1634,7 +1634,7 @@ This appears to show unique populations of cells for each experimental condition
 Upon closer inspection, we found that samples B1 and B2 contained cells with considerably smaller library sizes (Figure \@ref(fig:lib-size)).
 Importantly, we observed that B1 and B2 shared almost all of their cell barcodes with each other and with other samples that were multiplexed with them (Figure \@ref(fig:sharing)). 
 This behaviour is clearly unusual.
-(Accordingly, samples B1 and B2 were excluded from the earlier analyses in Figures \@ref(fig:good-plot} and \@ref(fig:bad-plot).)
+(Accordingly, samples B1 and B2 were excluded from the earlier analyses in Figures \@ref(fig:good-plot) and \@ref(fig:bad-plot).)
 
 ```{r lib-size, fig.cap = "Distribution of UMI count across all cell barcodes in each 10X sample. Only cell barcodes that were detected by CellRanger as cell-containing droplets are shown."}
 bc_tab <- table(samp2_all$barcode)
