@@ -6,7 +6,7 @@ if [ ! -e "bcswap_supp.html" ]
 	else
 
 		echo "Beginning download"
-		curl -k https://jmlab-gitlab.cruk.cam.ac.uk/Jonny/BarcodeSwapping2017Data/raw/master/bcswap_data.tar.gz > bcswap_data.tar.gz
+		curl https://jmlab-gitlab.cruk.cam.ac.uk/Jonny/BarcodeSwapping2017Data/raw/master/bcswap_data.tar.gz > bcswap_data.tar.gz
 		echo "Unpacking archive"
 		tar -xzf bcswap_data.tar.gz
 fi
