@@ -6,7 +6,7 @@ There are two main components to this repo: the supplementary report for the pap
 
 Unless you want to reuse any of the code or tweak/regenerate the report for yourself, you probably only want only the .html file of the report.
 
-The preprint of the paper can be found [here](http://www.biorxiv.org/content/early/2017/08/16/177048)
+The preprint of the paper can be found [here](https://www.biorxiv.org/content/early/2018/04/06/177048)
 
 You can also find a .pdf of a poster I have used to present this work at Single Cell Genomics 2017 (`poster.pdf`)
 
@@ -17,7 +17,7 @@ On my machine, Github will not show the html report interactively via the webpag
 ## Code information
 
 To generate the .html file, you first need to download the data. This can be done by changing your working directory to the one that contains this repo,
-then running the get_data.sh file (requires `wget`, which can be installed on OSX using `homebrew`; otherwise use `ftp` using the logon details in the script). Then you can compile the .Rmd file either using RStudio 
+then running the get_data.sh file. Then you can compile the .Rmd file either using RStudio 
 or `rmarkdown::render()`, from the R package `rmarkdown`. You'll need to ensure you have the packages listed in the first code chunk installed. This step takes around 20 minutes on a 2016 MacBook Pro.
 
 ## Further barcode swapping resources
@@ -36,5 +36,5 @@ If you are interested in the barcode swapping phenomenon, there are several othe
 
 * [van der Valk et al.](http://www.biorxiv.org/content/early/2017/08/22/179028) do not identify excessive barcode swapping on HiSeq X (they also have an excellent and in-depth introduction to the barcode swapping phenomenon)
 
-* [Costello et al.](https://link.springer.com/article/10.1186/s12864-018-4703-0) have produced a very comprehensive overview of the swapping they have observed in their lab.
+* [Costello et al.](https://link.springer.com/article/10.1186/s12864-018-4703-0) have produced a very comprehensive overview of the swapping they have observed in their lab for a variety of bulk sequencing studies.
 
